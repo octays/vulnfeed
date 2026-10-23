@@ -53,18 +53,9 @@ VulnFeed 是一个用于收集和推送高价值漏洞和补丁公告信息的�
 
 ## 本地开发
 
-### 安装 sqlx-cli
+数据库使用 SQLite，无需单独部署数据库服务，数据表结构在服务启动时自动迁移。
 
-```bash
-cargo install --version='~0.8' sqlx-cli --no-default-features --features rustls,postgres
-```
-
-### 启动数据库
-
-```bash
-chmod a+x ./scripts/init_db.sh
-./scripts/init_db.sh
-```
+前端静态资源在 `cargo build` 时自动内嵌进二进制文件：构建脚本检测到 `assets/public` 不存在时会自动调用 `bun` 构建前端（需要安装 bun；未安装时跳过并输出警告，可用 `VULNFEED_SKIP_FRONTEND_BUILD=1` 强制跳过）。
 
 ### 后端服务
 
@@ -81,13 +72,13 @@ cargo run --bin vulnfeed server -c ./dev/config.toml
 ### 前端服务
 
 ```bash
-cd assets && pnpm install
-pnpm dev
+cd assets && bun install
+bun dev
 ```
 
 ## 服务部署
 
-项目已经写好了 `Dockerfile` 和 `docker-compose.yml`, 可以本地构建服务镜像，这里将前端代码打包到后端服务中，不需要单独的Nginx服务。
+项目已经写好了 `Dockerfile` 和 `docker-compose.yml`, 可以本地构建服务镜像，这里将前端代码打包到后端服务中，不需要单独的Nginx服务，也不需要数据库服务（SQLite 数据文件挂载在 `./data` 目录）。
 
 ```bash
 docker build -t vulnfeed:latest .
@@ -103,7 +94,7 @@ docker load -i vulnfeed.tar
 服务器创建部署目录：
 
 ```bash
-mkdir /data/vulnfeed/config -p
+mkdir /data/vulnfeed/config /data/vulnfeed/data -p
 ```
 
 将 `dev/config.toml` 配置文件拷贝到 `/data/vulnfeed/config`

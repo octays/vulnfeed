@@ -33,3 +33,15 @@ report.*.json
 
 # logs
 logs/
+
+# -- SQLite
+*.db
+*.db-wal
+*.db-shm
+
+# -- Frontend build output
+assets/public/
+
+# -- Staged frontend assets (embedded at build time by build.rs)
+public/*
+!public/.gitkeep
