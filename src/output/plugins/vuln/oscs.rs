@@ -113,13 +113,13 @@ impl OscsPlugin {
             let vuln_info = self.parse_detail(&item.mps).await;
             match vuln_info {
                 Ok(mut vuln) => {
-                    vuln.tags = tags;
+                    vuln.tags = tags.into();
                     self.sender.send(vuln).change_context_lazy(|| {
                         Error::Message("Failed to send vuln information to channel".to_string())
                     })?;
                 }
                 Err(e) => {
-                    log::error!("oscs parse {} detail error: {}", &item.mps, e);
+                    log::error!("oscs parse {} detail error: {}", item.mps, e);
                     continue;
                 }
             }
@@ -150,13 +150,13 @@ impl OscsPlugin {
             severity: severity.to_string(),
             cve: data.cve_id,
             disclosure,
-            reference_links: references,
+            reference_links: references.into(),
             solutions,
             source: self.link.clone(),
             source_name: self.name.to_string(),
-            tags: vec![],
-            reasons: vec![],
-            github_search: vec![],
+            tags: vec![].into(),
+            reasons: vec![].into(),
+            github_search: vec![].into(),
             pushed: false,
             detail_link,
         };

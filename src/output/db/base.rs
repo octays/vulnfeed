@@ -1,11 +1,11 @@
 use error_stack::ResultExt;
 use modql::{SIden, field::HasSeaFields};
 use sea_query::{
-    Alias, Asterisk, Condition, Expr, Iden, IntoIden, OnConflict, PostgresQueryBuilder, Query,
-    SelectStatement, TableRef,
+    Alias, Asterisk, Condition, Expr, Iden, IntoIden, OnConflict, Query, SelectStatement,
+    SqliteQueryBuilder, TableRef,
 };
 use sea_query_binder::SqlxBinder;
-use sqlx::{FromRow, Postgres, Row, Transaction};
+use sqlx::{FromRow, Row, Sqlite, Transaction};
 
 use crate::{AppResult, errors::Error};
 
@@ -21,7 +21,7 @@ pub enum CommonIden {
     Id,
 }
 
-pub async fn dao_create<D, E>(tx: &mut Transaction<'_, Postgres>, req: E) -> AppResult<i64>
+pub async fn dao_create<D, E>(tx: &mut Transaction<'_, Sqlite>, req: E) -> AppResult<i64>
 where
     E: HasSeaFields,
     D: Dao,
@@ -35,7 +35,7 @@ where
         .values(sea_values)
         .change_context_lazy(|| Error::Message("failed to create record".to_string()))?
         .returning(Query::returning().columns([CommonIden::Id]));
-    let (sql, values) = query.build_sqlx(PostgresQueryBuilder);
+    let (sql, values) = query.build_sqlx(SqliteQueryBuilder);
     log::debug!("sql: {} values: {:?}", sql, values);
     let sqlx_query = sqlx::query_as_with::<_, (i64,), _>(&sql, values);
     let (id,) = sqlx_query
@@ -45,15 +45,15 @@ where
     Ok(id)
 }
 
-pub async fn dao_first<D, T>(tx: &mut Transaction<'_, Postgres>) -> AppResult<Option<T>>
+pub async fn dao_first<D, T>(tx: &mut Transaction<'_, Sqlite>) -> AppResult<Option<T>>
 where
     D: Dao,
-    T: for<'r> FromRow<'r, sqlx::postgres::PgRow> + Unpin + Send,
+    T: for<'r> FromRow<'r, sqlx::sqlite::SqliteRow> + Unpin + Send,
 {
     let (sql, values) = Query::select()
         .from(D::table_ref())
         .column(Asterisk)
-        .build_sqlx(PostgresQueryBuilder);
+        .build_sqlx(SqliteQueryBuilder);
 
     log::debug!("sql: {} values: {:?}", sql, values);
     let ret = sqlx::query_as_with::<_, T, _>(&sql, values)
@@ -64,7 +64,7 @@ where
 }
 
 pub async fn dao_upsert<D, E>(
-    tx: &mut Transaction<'_, Postgres>,
+    tx: &mut Transaction<'_, Sqlite>,
     req: E,
     conflict_column: &str,
     update_columns: &[&str],
@@ -74,6 +74,12 @@ where
     D: Dao,
 {
     let fields = req.not_none_sea_fields();
+    let conflict_value = fields
+        .clone()
+        .into_vec()
+        .into_iter()
+        .find(|f| f.iden.to_string() == conflict_column)
+        .and_then(|f| f.sea_value().cloned());
     let (columns, sea_values) = fields.for_sea_insert();
 
     let mut query = Query::insert();
@@ -98,32 +104,53 @@ where
     query.on_conflict(on_conflict);
     query.returning(Query::returning().columns([CommonIden::Id]));
 
-    let (sql, values) = query.build_sqlx(PostgresQueryBuilder);
+    let (sql, values) = query.build_sqlx(SqliteQueryBuilder);
     log::debug!("sql: {} values: {:?}", sql, values);
 
     let sqlx_query = sqlx::query_as_with::<_, (i64,), _>(&sql, values);
-    let (id,) = sqlx_query
-        .fetch_one(tx.as_mut())
+    let row = sqlx_query
+        .fetch_optional(tx.as_mut())
         .await
         .change_context_lazy(|| Error::Message("failed to upsert record".to_string()))?;
 
-    Ok(id)
+    // SQLite's `ON CONFLICT DO NOTHING RETURNING` yields no row on conflict;
+    // fall back to fetching the existing row id by the conflict column.
+    match row {
+        Some((id,)) => Ok(id),
+        None => {
+            let conflict_value = conflict_value.ok_or_else(|| {
+                Error::Message(format!(
+                    "conflict column '{conflict_column}' not found in upsert fields"
+                ))
+            })?;
+            let (sql, values) = Query::select()
+                .from(D::table_ref())
+                .column(CommonIden::Id)
+                .and_where(Expr::col(Alias::new(conflict_column)).eq(conflict_value))
+                .build_sqlx(SqliteQueryBuilder);
+            let (id,) = sqlx::query_as_with::<_, (i64,), _>(&sql, values)
+                .fetch_one(tx.as_mut())
+                .await
+                .change_context_lazy(|| Error::Message("failed to upsert record".to_string()))?;
+            Ok(id)
+        }
+    }
 }
 
 pub async fn dao_fetch_by_column<D, T>(
-    tx: &mut Transaction<'_, Postgres>,
+    tx: &mut Transaction<'_, Sqlite>,
     column_name: &str,
     value: &str,
 ) -> AppResult<Option<T>>
 where
     D: Dao,
-    T: for<'r> FromRow<'r, sqlx::postgres::PgRow> + Unpin + Send,
+    T: for<'r> FromRow<'r, sqlx::sqlite::SqliteRow> + Unpin + Send,
 {
     let (sql, values) = Query::select()
         .from(D::table_ref())
         .column(Asterisk)
         .and_where(Expr::col(Alias::new(column_name)).eq(value))
-        .build_sqlx(PostgresQueryBuilder);
+        .build_sqlx(SqliteQueryBuilder);
 
     log::debug!("sql: {} values: {:?}", sql, values);
 
@@ -134,7 +161,7 @@ where
 
     Ok(result)
 }
-pub async fn dao_update<D, E>(tx: &mut Transaction<'_, Postgres>, id: i64, req: E) -> AppResult<u64>
+pub async fn dao_update<D, E>(tx: &mut Transaction<'_, Sqlite>, id: i64, req: E) -> AppResult<u64>
 where
     E: HasSeaFields,
     D: Dao,
@@ -148,11 +175,11 @@ where
         .and_where(Expr::col(CommonIden::Id).eq(id));
 
     // Add values to update
-    for (column, value) in columns.into_iter().zip(sea_values.into_iter()) {
+    for (column, value) in columns.into_iter().zip(sea_values) {
         query.value(column, value);
     }
 
-    let (sql, values) = query.build_sqlx(PostgresQueryBuilder);
+    let (sql, values) = query.build_sqlx(SqliteQueryBuilder);
     log::debug!("sql: {} values: {:?}", sql, values);
 
     let sqlx_query = sqlx::query_with(&sql, values);
@@ -165,7 +192,7 @@ where
 }
 
 pub async fn dao_update_field<D>(
-    tx: &mut Transaction<'_, Postgres>,
+    tx: &mut Transaction<'_, Sqlite>,
     id: i64,
     field_name: &str,
     field_value: impl Into<sea_query::Value>,
@@ -179,7 +206,7 @@ where
         .and_where(Expr::col(CommonIden::Id).eq(id))
         .value(Alias::new(field_name), field_value);
 
-    let (sql, values) = query.build_sqlx(PostgresQueryBuilder);
+    let (sql, values) = query.build_sqlx(SqliteQueryBuilder);
     log::debug!("sql: {} values: {:?}", sql, values);
 
     let sqlx_query = sqlx::query_with(&sql, values);
@@ -192,18 +219,18 @@ where
 }
 
 pub async fn dao_fetch_by_id<D, T>(
-    tx: &mut Transaction<'_, Postgres>,
+    tx: &mut Transaction<'_, Sqlite>,
     id: i64,
 ) -> AppResult<Option<T>>
 where
     D: Dao,
-    T: for<'r> FromRow<'r, sqlx::postgres::PgRow> + Unpin + Send,
+    T: for<'r> FromRow<'r, sqlx::sqlite::SqliteRow> + Unpin + Send,
 {
     let (sql, values) = Query::select()
         .from(D::table_ref())
         .column(Asterisk)
         .and_where(Expr::col(CommonIden::Id).eq(id))
-        .build_sqlx(PostgresQueryBuilder);
+        .build_sqlx(SqliteQueryBuilder);
 
     log::debug!("sql: {} values: {:?}", sql, values);
 
@@ -280,11 +307,11 @@ impl<D: Dao> DaoQueryBuilder<D> {
         self
     }
 
-    pub async fn fetch_all<T>(self, tx: &mut Transaction<'_, Postgres>) -> AppResult<Vec<T>>
+    pub async fn fetch_all<T>(self, tx: &mut Transaction<'_, Sqlite>) -> AppResult<Vec<T>>
     where
-        T: for<'r> FromRow<'r, sqlx::postgres::PgRow> + Unpin + Send,
+        T: for<'r> FromRow<'r, sqlx::sqlite::SqliteRow> + Unpin + Send,
     {
-        let (sql, values) = self.query.build_sqlx(PostgresQueryBuilder);
+        let (sql, values) = self.query.build_sqlx(SqliteQueryBuilder);
         log::debug!("sql: {} values: {:?}", sql, values);
 
         let result = sqlx::query_as_with::<_, T, _>(&sql, values)
@@ -295,7 +322,7 @@ impl<D: Dao> DaoQueryBuilder<D> {
         Ok(result)
     }
 
-    pub async fn count(self, tx: &mut Transaction<'_, Postgres>) -> AppResult<i64> {
+    pub async fn count(self, tx: &mut Transaction<'_, Sqlite>) -> AppResult<i64> {
         let mut count_query = Query::select();
         count_query
             .from(D::table_ref())
@@ -305,7 +332,7 @@ impl<D: Dao> DaoQueryBuilder<D> {
             count_query.cond_where(condition);
         }
 
-        let (sql, values) = count_query.build_sqlx(PostgresQueryBuilder);
+        let (sql, values) = count_query.build_sqlx(SqliteQueryBuilder);
         log::debug!("sql: {} values: {:?}", sql, values);
 
         let result = sqlx::query_with(&sql, values)

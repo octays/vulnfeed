@@ -131,16 +131,8 @@ pub struct Jwt {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Database {
-    #[serde(default = "default_database_host")]
-    pub host: String,
-    #[serde(default = "default_database_port")]
-    pub port: u16,
-    #[serde(default = "default_database_username")]
-    pub username: String,
-    #[serde(default = "default_database_password")]
-    pub password: String,
-    #[serde(default = "default_database_name")]
-    pub database_name: String,
+    #[serde(default = "default_database_path")]
+    pub path: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -196,11 +188,7 @@ impl Default for Config {
                 },
             },
             database: Database {
-                host: default_database_host(),
-                port: default_database_port(),
-                username: default_database_username(),
-                password: default_database_password(),
-                database_name: default_database_name(),
+                path: default_database_path(),
             },
             telemetry: TelemetryConfig {
                 logs: LogsConfig {
@@ -243,28 +231,8 @@ pub const fn known_option_entries() -> &'static [OptionEntry] {
             ent_type: "integer",
         },
         OptionEntry {
-            env_name: "VULNFEED_CONFIG_DATABASE_HOST",
-            ent_path: "database.host",
-            ent_type: "string",
-        },
-        OptionEntry {
-            env_name: "VULNFEED_CONFIG_DATABASE_PORT",
-            ent_path: "database.port",
-            ent_type: "integer",
-        },
-        OptionEntry {
-            env_name: "VULNFEED_CONFIG_DATABASE_NAME",
-            ent_path: "database.database_name",
-            ent_type: "string",
-        },
-        OptionEntry {
-            env_name: "VULNFEED_CONFIG_DATABASE_USERNAME",
-            ent_path: "database.username",
-            ent_type: "string",
-        },
-        OptionEntry {
-            env_name: "VULNFEED_CONFIG_DATABASE_PASSWORD",
-            ent_path: "database.password",
+            env_name: "VULNFEED_CONFIG_DATABASE_PATH",
+            ent_path: "database.path",
             ent_type: "string",
         },
     ]
@@ -282,22 +250,6 @@ fn default_jwt_expiration() -> u64 {
     604800
 }
 
-fn default_database_host() -> String {
-    "localhost".to_string()
-}
-
-fn default_database_port() -> u16 {
-    5432
-}
-
-fn default_database_username() -> String {
-    "postgres".to_string()
-}
-
-fn default_database_password() -> String {
-    "postgres".to_string()
-}
-
-fn default_database_name() -> String {
-    "vulnfeed".to_string()
+fn default_database_path() -> String {
+    "vulnfeed.db".to_string()
 }

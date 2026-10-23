@@ -9,7 +9,7 @@ use crate::{
     AppResult,
     errors::Error,
     output::{
-        db::{pg::Pg, sync_data_task::SyncDataTaskDao},
+        db::{sqlite::Db, sync_data_task::SyncDataTaskDao},
         plugins::{
             sec_notice::{get_notice_registry, list_sec_notice_names},
             vuln::{get_registry, list_plugin_names},
@@ -19,17 +19,17 @@ use crate::{
 
 pub struct Scheduler {
     sched: JobScheduler,
-    pg: Arc<Pg>,
+    db: Arc<Db>,
 }
 
 impl Scheduler {
-    pub async fn try_new(pg: Pg) -> AppResult<Self> {
+    pub async fn try_new(db: Db) -> AppResult<Self> {
         let sched = JobScheduler::new()
             .await
             .change_context_lazy(|| Error::Message("Failed to create scheduler".to_string()))?;
         Ok(Scheduler {
             sched,
-            pg: Arc::new(pg),
+            db: Arc::new(db),
         })
     }
 
@@ -50,7 +50,7 @@ impl Scheduler {
 
     async fn add_job_and_update_db(
         &self,
-        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
         task: &crate::domain::models::sync_data_task::SyncDataTask,
         job: tokio_cron_scheduler::Job,
     ) -> AppResult<()> {
@@ -76,7 +76,7 @@ impl Scheduler {
 
     pub async fn update(&self, id: i64) -> AppResult<()> {
         let mut tx =
-            self.pg.pool.begin().await.change_context_lazy(|| {
+            self.db.pool.begin().await.change_context_lazy(|| {
                 Error::Message("failed to begin transaction".to_string())
             })?;
         let sync_data_task = SyncDataTaskDao::first(&mut tx).await?;
@@ -106,7 +106,7 @@ impl Scheduler {
 
     pub async fn init_from_db(self) -> AppResult<Self> {
         let mut tx =
-            self.pg.pool.begin().await.change_context_lazy(|| {
+            self.db.pool.begin().await.change_context_lazy(|| {
                 Error::Message("failed to begin transaction".to_string())
             })?;
         if let Some(task) = SyncDataTaskDao::first(&mut tx).await? {

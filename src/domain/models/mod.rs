@@ -4,5 +4,6 @@ pub mod ding_bot;
 pub mod extension_data;
 pub mod page_utils;
 pub mod security_notice;
+pub mod sql_json_vec;
 pub mod sync_data_task;
 pub mod vuln_information;

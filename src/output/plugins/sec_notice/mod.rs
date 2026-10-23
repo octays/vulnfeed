@@ -49,6 +49,7 @@ pub fn init(sender: UnboundedSender<CreateSecurityNotice>) -> AppResult<()> {
     Ok(())
 }
 
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait SecNoticePlugin: Send + Sync + 'static {
     fn get_name(&self) -> String;

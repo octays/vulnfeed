@@ -1,5 +1,5 @@
 use sea_query::Value;
-use sqlx::{Postgres, Transaction};
+use sqlx::{Sqlite, Transaction};
 
 use crate::{
     AppResult,
@@ -20,7 +20,7 @@ impl Dao for SecurityNoticeDao {
 
 impl SecurityNoticeDao {
     pub async fn create(
-        tx: &mut Transaction<'_, Postgres>,
+        tx: &mut Transaction<'_, Sqlite>,
         req: CreateSecurityNotice,
     ) -> AppResult<i64> {
         let id = dao_create::<Self, _>(tx, req).await?;
@@ -28,21 +28,21 @@ impl SecurityNoticeDao {
     }
 
     pub async fn fetch_by_key(
-        tx: &mut Transaction<'_, Postgres>,
+        tx: &mut Transaction<'_, Sqlite>,
         key: &str,
     ) -> AppResult<Option<SecuritNotice>> {
         dao_fetch_by_column::<Self, SecuritNotice>(tx, "key", key).await
     }
 
     pub async fn fetch_by_id(
-        tx: &mut Transaction<'_, Postgres>,
+        tx: &mut Transaction<'_, Sqlite>,
         id: i64,
     ) -> AppResult<Option<SecuritNotice>> {
         dao_fetch_by_id::<Self, SecuritNotice>(tx, id).await
     }
 
     pub async fn update_pushed(
-        tx: &mut Transaction<'_, Postgres>,
+        tx: &mut Transaction<'_, Sqlite>,
         id: i64,
         status: bool,
     ) -> AppResult<u64> {
@@ -51,7 +51,7 @@ impl SecurityNoticeDao {
     }
 
     pub async fn filter_security_notices(
-        tx: &mut Transaction<'_, Postgres>,
+        tx: &mut Transaction<'_, Sqlite>,
         page_filter: &PageFilter,
         search_params: &SearchParams,
     ) -> AppResult<Vec<SecuritNotice>> {
@@ -80,7 +80,7 @@ impl SecurityNoticeDao {
     }
 
     pub async fn filter_security_notices_count(
-        tx: &mut Transaction<'_, Postgres>,
+        tx: &mut Transaction<'_, Sqlite>,
         search_params: &SearchParams,
     ) -> AppResult<i64> {
         let mut query_builder = DaoQueryBuilder::<Self>::new();

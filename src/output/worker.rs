@@ -8,7 +8,7 @@ use crate::{
     domain::models::vuln_information::CreateVulnInformation,
     errors::Error,
     output::{
-        db::{ding_bot_config::DingBotConfigDao, pg::Pg, vuln_information::VulnInformationDao},
+        db::{ding_bot_config::DingBotConfigDao, sqlite::Db, vuln_information::VulnInformationDao},
         push::{MessageBot, ding_bot::DingBot, render_vulninfo},
     },
     utils::search::search_github_poc,
@@ -16,14 +16,14 @@ use crate::{
 
 pub struct Worker {
     pub receiver: UnboundedReceiver<CreateVulnInformation>,
-    pub pg: Arc<Pg>,
+    pub db: Arc<Db>,
 }
 
 impl Worker {
-    pub fn new(receiver: UnboundedReceiver<CreateVulnInformation>, pg: Pg) -> Self {
+    pub fn new(receiver: UnboundedReceiver<CreateVulnInformation>, db: Db) -> Self {
         Worker {
             receiver,
-            pg: Arc::new(pg),
+            db: Arc::new(db),
         }
     }
 
@@ -47,7 +47,7 @@ impl Worker {
     pub async fn ding_bot_push(&self, id: i64) -> AppResult<()> {
         log::info!("ding bot push start! id: {}", id);
         let mut tx =
-            self.pg.pool.begin().await.change_context_lazy(|| {
+            self.db.pool.begin().await.change_context_lazy(|| {
                 Error::Message("failed to begin transaction".to_string())
             })?;
         let ding_bot_config = DingBotConfigDao::first(&mut tx).await?;
@@ -84,7 +84,7 @@ impl Worker {
 
     pub async fn store(&self, mut req: CreateVulnInformation) -> AppResult<(i64, bool)> {
         let mut tx =
-            self.pg.pool.begin().await.change_context_lazy(|| {
+            self.db.pool.begin().await.change_context_lazy(|| {
                 Error::Message("failed to begin transaction".to_string())
             })?;
         if VulnInformationDao::fetch_by_key(&mut tx, &req.key)
@@ -92,7 +92,7 @@ impl Worker {
             .is_none()
             && !req.cve.is_empty()
         {
-            req.github_search = search_github_poc(&req.cve).await;
+            req.github_search = search_github_poc(&req.cve).await.into();
         }
         let (id, as_new_vuln) = VulnInformationDao::create_or_update(&mut tx, req).await?;
         tx.commit()

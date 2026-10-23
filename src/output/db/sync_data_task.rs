@@ -1,5 +1,5 @@
 use sea_query::Value;
-use sqlx::{Postgres, Transaction};
+use sqlx::{Sqlite, Transaction};
 
 use crate::{
     AppResult,
@@ -14,13 +14,13 @@ impl Dao for SyncDataTaskDao {
 }
 
 impl SyncDataTaskDao {
-    pub async fn first(tx: &mut Transaction<'_, Postgres>) -> AppResult<Option<SyncDataTask>> {
+    pub async fn first(tx: &mut Transaction<'_, Sqlite>) -> AppResult<Option<SyncDataTask>> {
         let task = dao_first::<Self, _>(tx).await?;
         Ok(task)
     }
 
     pub async fn create(
-        tx: &mut Transaction<'_, Postgres>,
+        tx: &mut Transaction<'_, Sqlite>,
         req: CreateSyncDataTaskRequest,
     ) -> AppResult<i64> {
         let task: Option<SyncDataTask> = dao_first::<Self, _>(tx).await?;
@@ -33,7 +33,7 @@ impl SyncDataTaskDao {
     }
 
     pub async fn update_job(
-        tx: &mut Transaction<'_, Postgres>,
+        tx: &mut Transaction<'_, Sqlite>,
         id: i64,
         job_id: String,
     ) -> AppResult<u64> {

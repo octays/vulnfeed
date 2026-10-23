@@ -1,5 +1,5 @@
 use sea_query::Value;
-use sqlx::{Postgres, Transaction};
+use sqlx::{Sqlite, Transaction};
 
 use crate::{
     AppResult,
@@ -25,7 +25,7 @@ impl Dao for VulnInformationDao {
 
 impl VulnInformationDao {
     pub async fn update_pushed(
-        tx: &mut Transaction<'_, Postgres>,
+        tx: &mut Transaction<'_, Sqlite>,
         id: i64,
         status: bool,
     ) -> AppResult<u64> {
@@ -34,7 +34,7 @@ impl VulnInformationDao {
     }
 
     pub async fn create(
-        tx: &mut Transaction<'_, Postgres>,
+        tx: &mut Transaction<'_, Sqlite>,
         req: CreateVulnInformation,
     ) -> AppResult<i64> {
         let id = dao_create::<Self, _>(tx, req).await?;
@@ -88,7 +88,7 @@ impl VulnInformationDao {
     }
 
     pub async fn create_or_update(
-        tx: &mut Transaction<'_, Postgres>,
+        tx: &mut Transaction<'_, Sqlite>,
         mut req: CreateVulnInformation,
     ) -> AppResult<(i64, bool)> {
         let mut as_new_vuln = false;
@@ -114,7 +114,7 @@ impl VulnInformationDao {
     }
 
     pub async fn filter_vulnfusion_information(
-        tx: &mut Transaction<'_, Postgres>,
+        tx: &mut Transaction<'_, Sqlite>,
         page_filter: &PageFilter,
         search_params: &SearchParams,
     ) -> AppResult<Vec<VulnInformation>> {
@@ -147,7 +147,7 @@ impl VulnInformationDao {
     }
 
     pub async fn filter_vulnfusion_information_count(
-        tx: &mut Transaction<'_, Postgres>,
+        tx: &mut Transaction<'_, Sqlite>,
         search_params: &SearchParams,
     ) -> AppResult<i64> {
         let mut query_builder = DaoQueryBuilder::<Self>::new();
@@ -172,14 +172,14 @@ impl VulnInformationDao {
     }
 
     pub async fn fetch_by_id(
-        tx: &mut Transaction<'_, Postgres>,
+        tx: &mut Transaction<'_, Sqlite>,
         id: i64,
     ) -> AppResult<Option<VulnInformation>> {
         dao_fetch_by_id::<Self, VulnInformation>(tx, id).await
     }
 
     pub async fn fetch_by_key(
-        tx: &mut Transaction<'_, Postgres>,
+        tx: &mut Transaction<'_, Sqlite>,
         key: &str,
     ) -> AppResult<Option<VulnInformation>> {
         dao_fetch_by_column::<Self, VulnInformation>(tx, "key", key).await

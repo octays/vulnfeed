@@ -15,7 +15,7 @@ use crate::{
     errors::Error,
     input::http::http_server::{self, make_acceptor_and_advertise_addr},
     output::{
-        db::{admin_user::AdminUserDao, pg::Pg},
+        db::{admin_user::AdminUserDao, sqlite::Db},
         plugins::{sec_notice, vuln},
         scheduler::Scheduler,
         sec_notcie_worker::SecNoticeWorker,
@@ -78,7 +78,7 @@ async fn run_server(server_rt: &Runtime, config: Config) -> AppResult<()> {
 
     let jwt = JWT::new(&config.auth.jwt.secret);
 
-    let db = Pg::new(&config).await.change_context_lazy(make_error)?;
+    let db = Db::new(&config).await.change_context_lazy(make_error)?;
 
     sqlx::migrate!("./migrations")
         .run(&db.pool)
@@ -167,7 +167,11 @@ impl CreateSuperUser {
 async fn run_create_super_user(config: Config, password: String) -> AppResult<()> {
     let make_error = || Error::Message("failed to create super user".to_string());
     let password_hash = compute_password_hash(&password).change_context_lazy(make_error)?;
-    let db = Pg::new(&config).await.change_context_lazy(make_error)?;
+    let db = Db::new(&config).await.change_context_lazy(make_error)?;
+    sqlx::migrate!("./migrations")
+        .run(&db.pool)
+        .await
+        .change_context_lazy(make_error)?;
     let mut tx = db.pool.begin().await.change_context_lazy(make_error)?;
 
     let req = CreateAdminUserRequest::new(

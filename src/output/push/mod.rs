@@ -18,6 +18,7 @@ lazy_static! {
     static ref PLUGINS: Arc<DashMap<String, Box<dyn MessageBot>>> = Arc::new(DashMap::new());
 }
 
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait MessageBot: Send + Sync {
     async fn push_markdown(&self, title: String, msg: String) -> AppResult<()>;
@@ -62,7 +63,7 @@ const MAX_REFERENCE_LENGTH: usize = 8;
 
 pub fn render_vulninfo(mut vuln: VulnInformation) -> AppResult<String> {
     if vuln.reference_links.len() > MAX_REFERENCE_LENGTH {
-        vuln.reference_links = vuln.reference_links[..MAX_REFERENCE_LENGTH].to_vec();
+        vuln.reference_links = vuln.reference_links[..MAX_REFERENCE_LENGTH].to_vec().into();
     }
     let json_value: Value = serde_json::to_value(vuln)
         .map_err(|e| Error::Message(format!("Failed to serialize vuln info: {e}")))?;

@@ -7,11 +7,7 @@ secret = "LSJ74YUWkzGheiWMRxcH" # for development
 expiration = 604800             # 7 days
 
 [database]
-host = "127.0.0.1"
-port = 5432
-username = "postgres"
-password = "YSm*wF60c72CLJD!"
-database_name = "vulnfeed"
+path = "data/vulnfeed.db"
 
 [telemetry.logs.file]
 filter = "INFO"

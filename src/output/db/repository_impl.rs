@@ -18,14 +18,14 @@ use crate::{
     },
     errors::Error,
     output::db::{
-        admin_user::AdminUserDao, ding_bot_config::DingBotConfigDao, pg::Pg,
-        security_notice::SecurityNoticeDao, sync_data_task::SyncDataTaskDao,
+        admin_user::AdminUserDao, ding_bot_config::DingBotConfigDao,
+        security_notice::SecurityNoticeDao, sqlite::Db, sync_data_task::SyncDataTaskDao,
         vuln_information::VulnInformationDao,
     },
     utils::password_hash::verify_password_hash,
 };
 
-impl VulnRepository for Pg {
+impl VulnRepository for Db {
     async fn login(&self, req: &LoginRequest) -> AppResult<AdminUser> {
         let mut tx =
             self.pool.begin().await.change_context_lazy(|| {

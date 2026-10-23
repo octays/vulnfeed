@@ -8,21 +8,21 @@ use crate::{
     domain::models::security_notice::CreateSecurityNotice,
     errors::Error,
     output::{
-        db::{ding_bot_config::DingBotConfigDao, pg::Pg, security_notice::SecurityNoticeDao},
+        db::{ding_bot_config::DingBotConfigDao, security_notice::SecurityNoticeDao, sqlite::Db},
         push::{MessageBot, ding_bot::DingBot, render_sec_notice},
     },
 };
 
 pub struct SecNoticeWorker {
     pub receiver: UnboundedReceiver<CreateSecurityNotice>,
-    pub pg: Arc<Pg>,
+    pub db: Arc<Db>,
 }
 
 impl SecNoticeWorker {
-    pub fn new(receiver: UnboundedReceiver<CreateSecurityNotice>, pg: Pg) -> Self {
+    pub fn new(receiver: UnboundedReceiver<CreateSecurityNotice>, db: Db) -> Self {
         SecNoticeWorker {
             receiver,
-            pg: Arc::new(pg),
+            db: Arc::new(db),
         }
     }
 
@@ -46,7 +46,7 @@ impl SecNoticeWorker {
     pub async fn ding_bot_push(&self, id: i64) -> AppResult<()> {
         log::info!("ding bot push start! id: {}", id);
         let mut tx =
-            self.pg.pool.begin().await.change_context_lazy(|| {
+            self.db.pool.begin().await.change_context_lazy(|| {
                 Error::Message("failed to begin transaction".to_string())
             })?;
         let ding_bot_config = DingBotConfigDao::first(&mut tx).await?;
@@ -85,7 +85,7 @@ impl SecNoticeWorker {
 
     pub async fn store(&self, req: CreateSecurityNotice) -> AppResult<(i64, bool)> {
         let mut tx =
-            self.pg.pool.begin().await.change_context_lazy(|| {
+            self.db.pool.begin().await.change_context_lazy(|| {
                 Error::Message("failed to begin transaction".to_string())
             })?;
         let res = SecurityNoticeDao::fetch_by_key(&mut tx, &req.key).await?;

@@ -36,6 +36,7 @@ pub fn init(sender: UnboundedSender<CreateVulnInformation>) -> AppResult<()> {
     Ok(())
 }
 
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait VulnPlugin: Send + Sync + 'static {
     fn get_name(&self) -> String;
