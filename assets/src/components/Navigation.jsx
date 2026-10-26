@@ -92,14 +92,14 @@ const Navigation = () => {
               )}
               {isAuthenticated && (
                 <Link
-                  to="/dingbot/config"
+                                        to="/push/channels"
                   className={`${
-                    isActive('/dingbot/config')
+                                        isActive('/push/channels')
                       ? 'border-indigo-500 text-gray-900'
                       : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
                   } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
                 >
-                  钉钉推送
+                                        推送渠道
                 </Link>
               )}
             </div>

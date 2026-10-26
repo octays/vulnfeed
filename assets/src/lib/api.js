@@ -118,3 +118,14 @@ export default api
 
 // 立即触发一轮全量同步
 export const runSyncDataTaskNow = () => api.post('/sync_data_task/run')
+
+// 推送渠道管理
+export const listPushChannels = () => api.get('/push_channels')
+
+export const createPushChannel = (channel) => api.post('/push_channels', channel)
+
+export const updatePushChannel = (id, channel) => api.put(`/push_channels/${id}`, channel)
+
+export const deletePushChannel = (id) => api.delete(`/push_channels/${id}`)
+
+export const testPushChannel = (id) => api.post(`/push_channels/${id}/test`)

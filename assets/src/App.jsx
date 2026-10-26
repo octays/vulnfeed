@@ -5,7 +5,7 @@ import VulnerabilityListPage from './routes/vuln/list'
 import VulnerabilityDetailPage from './routes/vuln/detail'
 import SyncDataTaskPage from './routes/sync/task'
 import PluginListPage from './routes/plugins/list'
-import DingBotConfigPage from './routes/dingbot/config'
+import PushChannelPage from './routes/push/channel'
 import SecNoticeListPage from './routes/secnotice/list'
 import ProtectedRoute from './components/ProtectedRoute'
 import Layout from './components/Layout'
@@ -66,11 +66,11 @@ function App() {
           }
         />
         <Route
-          path="/dingbot/config"
+                path="/push/channels"
           element={
             <ProtectedRoute>
               <Layout>
-                <DingBotConfigPage />
+                        <PushChannelPage />
               </Layout>
             </ProtectedRoute>
           }
