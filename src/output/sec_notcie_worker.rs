@@ -8,8 +8,8 @@ use crate::{
     domain::models::security_notice::CreateSecurityNotice,
     errors::Error,
     output::{
-        db::{ding_bot_config::DingBotConfigDao, security_notice::SecurityNoticeDao, sqlite::Db},
-        push::{MessageBot, ding_bot::DingBot, render_sec_notice},
+        db::{push_channel::PushChannelDao, security_notice::SecurityNoticeDao, sqlite::Db},
+        push::{push_markdown_all, render_sec_notice},
     },
 };
 
@@ -35,7 +35,7 @@ impl SecNoticeWorker {
                 }
                 Ok((id, created)) => {
                     if created {
-                        self.ding_bot_push(id).await?;
+                        self.push_channels(id).await?;
                     }
                 }
             }
@@ -43,46 +43,41 @@ impl SecNoticeWorker {
         Ok(())
     }
 
-    pub async fn ding_bot_push(&self, id: i64) -> AppResult<()> {
-        log::info!("ding bot push start! id: {}", id);
+    pub async fn push_channels(&self, id: i64) -> AppResult<()> {
+        log::info!("push channels start! id: {}", id);
         let mut tx =
             self.db.pool.begin().await.change_context_lazy(|| {
                 Error::Message("failed to begin transaction".to_string())
             })?;
-        let ding_bot_config = DingBotConfigDao::first(&mut tx).await?;
-        if let Some(config) = ding_bot_config
-            && config.status
+        let channels = PushChannelDao::list_enabled(&mut tx).await?;
+        let sec_notice = SecurityNoticeDao::fetch_by_id(&mut tx, id).await?;
+        if let Some(n) = sec_notice
+            && !n.pushed
+            && !channels.is_empty()
         {
-            let sec_notice = SecurityNoticeDao::fetch_by_id(&mut tx, id).await?;
-            if let Some(s) = sec_notice
-                && !s.pushed
-            {
-                let ding = DingBot::try_new(config.access_token, config.secret_token)?;
-                let title = s.title.clone();
-                let msg = match render_sec_notice(s) {
-                    Ok(msg) => msg,
-                    Err(e) => {
-                        log::error!("Failed to render sec notice: {:?}", e);
-                        return Err(Error::Message(format!(
-                            "Failed to render sec notice: {:?}",
-                            e
-                        ))
-                        .into());
-                    }
-                };
-                ding.push_markdown(title, msg).await?;
-                log::info!("ding bot push success! id: {}", id);
+            let title = n.title.clone();
+            let msg = match render_sec_notice(n) {
+                Ok(msg) => msg,
+                Err(e) => {
+                    log::error!("Failed to read sec notice: {:?}", e);
+                    return Err(
+                        Error::Message(format!("Failed to read sec notice: {:?}", e)).into(),
+                    );
+                }
+            };
+            let ok = push_markdown_all(&channels, title, msg).await?;
+            if ok > 0 {
+                log::info!("push channels success! id: {} ({} channel(s))", id, ok);
                 SecurityNoticeDao::update_pushed(&mut tx, id, true).await?;
+            } else {
+                log::warn!("all push channels failed! id: {id}");
             }
-        } else {
-            log::info!("ding bot config not found or status is false");
         }
         tx.commit()
             .await
             .change_context_lazy(|| Error::Message("failed to commit transaction".to_string()))?;
         Ok(())
     }
-
     pub async fn store(&self, req: CreateSecurityNotice) -> AppResult<(i64, bool)> {
         let mut tx =
             self.db.pool.begin().await.change_context_lazy(|| {
