@@ -13,6 +13,8 @@ use crate::{
 };
 
 pub mod ding_bot;
+pub mod feishu_bot;
+pub mod wecom_bot;
 
 lazy_static! {
     static ref PLUGINS: Arc<DashMap<String, Box<dyn MessageBot>>> = Arc::new(DashMap::new());
