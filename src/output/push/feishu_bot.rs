@@ -1,7 +1,7 @@
 use crate::{
     AppResult,
     errors::Error,
-    output::push::MessageBot,
+    output::push::{MessageBot, markdown_for_feishu},
     utils::{http_client::HttpClient, util::calc_hmac_sha256},
 };
 use async_trait::async_trait;
@@ -36,6 +36,7 @@ struct Sign {
 #[async_trait]
 impl MessageBot for FeishuBot {
     async fn push_markdown(&self, title: String, msg: String) -> AppResult<()> {
+        let msg = markdown_for_feishu(&msg);
         let message = serde_json::json!({
             "msg_type": "interactive",
             "card": {

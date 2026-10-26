@@ -1,4 +1,9 @@
-use crate::{AppResult, errors::Error, output::push::MessageBot, utils::http_client::HttpClient};
+use crate::{
+    AppResult,
+    errors::Error,
+    output::push::{MessageBot, markdown_for_wecom},
+    utils::http_client::HttpClient,
+};
 use async_trait::async_trait;
 use reqwest::header;
 use serde::{Deserialize, Serialize};
@@ -21,6 +26,7 @@ struct WeComResponse {
 #[async_trait]
 impl MessageBot for WeComBot {
     async fn push_markdown(&self, title: String, msg: String) -> AppResult<()> {
+        let msg = markdown_for_wecom(&msg);
         let content = format!("## {title}\n{msg}");
         let message = serde_json::json!({
             "msgtype": "markdown",
