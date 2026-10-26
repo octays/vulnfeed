@@ -2,7 +2,7 @@ use crate::{
     AppResult,
     domain::{
         models::{
-            admin_user::AdminUser,
+            admin_user::{AdminUser, AdminUserPassword},
             auth::LoginRequest,
             ding_bot::{CreateDingBotRequest, DingBotConfig},
             push_channel::{CreatePushChannelRequest, PushChannel},
@@ -94,6 +94,16 @@ where
 
     async fn delete_push_channel(&self, id: i64) -> AppResult<()> {
         self.repo.delete_push_channel(id).await
+    }
+
+    async fn change_admin_password(
+        &self,
+        old_password: AdminUserPassword,
+        new_password: AdminUserPassword,
+    ) -> AppResult<()> {
+        self.repo
+            .change_admin_password(old_password, new_password)
+            .await
     }
 
     async fn list_sec_notice(

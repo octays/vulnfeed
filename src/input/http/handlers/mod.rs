@@ -1,3 +1,4 @@
+pub mod account;
 pub mod ding_bot_config;
 pub mod login;
 pub mod plugin;

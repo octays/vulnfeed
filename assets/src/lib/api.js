@@ -129,3 +129,7 @@ export const updatePushChannel = (id, channel) => api.put(`/push_channels/${id}`
 export const deletePushChannel = (id) => api.delete(`/push_channels/${id}`)
 
 export const testPushChannel = (id) => api.post(`/push_channels/${id}/test`)
+
+// 修改管理员密码
+export const changePassword = (oldPassword, newPassword) =>
+    api.post('/account/password', { old_password: oldPassword, new_password: newPassword })

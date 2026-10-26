@@ -1,7 +1,7 @@
 use crate::{
     AppResult,
     domain::models::{
-        admin_user::AdminUser,
+        admin_user::{AdminUser, AdminUserPassword},
         auth::LoginRequest,
         ding_bot::{CreateDingBotRequest, DingBotConfig},
         push_channel::{CreatePushChannelRequest, PushChannel},
@@ -54,6 +54,11 @@ pub trait VulnService: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = AppResult<()>> + Send;
 
     fn delete_push_channel(&self, id: i64) -> impl Future<Output = AppResult<()>> + Send;
+    fn change_admin_password(
+        &self,
+        old_password: AdminUserPassword,
+        new_password: AdminUserPassword,
+    ) -> impl Future<Output = AppResult<()>> + Send;
 
     fn list_sec_notice(
         &self,
@@ -101,6 +106,11 @@ pub trait VulnRepository: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = AppResult<()>> + Send;
 
     fn delete_push_channel(&self, id: i64) -> impl Future<Output = AppResult<()>> + Send;
+    fn change_admin_password(
+        &self,
+        old_password: AdminUserPassword,
+        new_password: AdminUserPassword,
+    ) -> impl Future<Output = AppResult<()>> + Send;
 
     fn list_sec_notice(
         &self,

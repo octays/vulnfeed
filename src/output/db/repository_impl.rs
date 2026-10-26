@@ -4,7 +4,7 @@ use crate::{
     AppResult,
     domain::{
         models::{
-            admin_user::AdminUser,
+            admin_user::{AdminUser, AdminUserPassword, AdminUsername, CreateAdminUserRequest},
             auth::LoginRequest,
             ding_bot::{CreateDingBotRequest, DingBotConfig},
             push_channel::{CreatePushChannelRequest, PushChannel},
@@ -164,6 +164,32 @@ impl VulnRepository for Db {
         tx.commit()
             .await
             .change_context_lazy(|| Error::Message("failed to commit transaction".to_string()))?;
+        Ok(())
+    }
+
+    async fn change_admin_password(
+        &self,
+        old_password: AdminUserPassword,
+        new_password: AdminUserPassword,
+    ) -> AppResult<()> {
+        let make_error = || Error::Message("failed to change admin password".to_string());
+        let mut tx = self.pool.begin().await.change_context_lazy(make_error)?;
+        let name = AdminUsername::try_new("admin").change_context_lazy(make_error)?;
+        let Some(user) = AdminUserDao::fetch_by_name(&mut tx, &name).await? else {
+            return Err(Error::Message("admin user not found".to_string()).into());
+        };
+        if !crate::utils::password_hash::verify_password_hash(old_password.as_ref(), &user.password)
+        {
+            return Err(Error::BadRequest("旧密码不正确".to_string()).into());
+        }
+        let new_hash = crate::utils::password_hash::compute_password_hash(new_password.as_ref())
+            .change_context_lazy(make_error)?;
+        let req = CreateAdminUserRequest::new(
+            name,
+            AdminUserPassword::try_new(new_hash).change_context_lazy(make_error)?,
+        );
+        AdminUserDao::create_super_user(&mut tx, req).await?;
+        tx.commit().await.change_context_lazy(make_error)?;
         Ok(())
     }
 
