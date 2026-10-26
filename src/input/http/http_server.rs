@@ -4,7 +4,7 @@ use mea::{shutdown::ShutdownRecv, waitgroup::WaitGroup};
 use poem::{
     Endpoint, EndpointExt, Route, get,
     listener::{Acceptor, Listener, TcpAcceptor, TcpListener},
-    post,
+    post, put,
 };
 use rust_embed::RustEmbed;
 
@@ -18,7 +18,7 @@ use crate::{
     cli::Ctx,
     domain::ports::VulnService,
     input::http::{
-        handlers::{login, plugin, sec_notice, sync_data_task, vuln_information},
+        handlers::{login, plugin, push_channel, sec_notice, sync_data_task, vuln_information},
         middleware::auth::AuthMiddleware,
     },
     utils::runtime::{self, Runtime},
@@ -117,6 +117,24 @@ fn api_routes<S: VulnService + Send + Sync + 'static>() -> impl Endpoint {
                         .at(
                             "/run",
                             post(sync_data_task::run_sync_data_task_now::<S>::default()),
+                        ),
+                )
+                .nest(
+                    "/push_channels",
+                    Route::new()
+                        .at(
+                            "",
+                            get(push_channel::list_push_channels::<S>::default())
+                                .post(push_channel::create_push_channel::<S>::default()),
+                        )
+                        .at(
+                            "/:id",
+                            put(push_channel::update_push_channel::<S>::default())
+                                .delete(push_channel::delete_push_channel::<S>::default()),
+                        )
+                        .at(
+                            "/:id/test",
+                            post(push_channel::test_push_channel::<S>::default()),
                         ),
                 )
                 .nest(
