@@ -25,7 +25,7 @@ pub fn load_config(config_file: PathBuf) -> AppResult<LoadConfigResult> {
         .change_context_lazy(|| Error::Message("failed to parse config file".to_string()))?;
 
     let env = std::env::vars()
-        .filter(|(key, _)| key.starts_with("VULNFEED_"))
+        .filter(|(key, _)| key.starts_with("VULNFEED_CONFIG_"))
         .collect::<std::collections::HashMap<String, String>>();
 
     fn set_toml_path(
