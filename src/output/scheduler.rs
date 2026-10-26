@@ -74,6 +74,14 @@ impl Scheduler {
         Ok(Some(job_id))
     }
 
+    /// 手动触发一轮全量插件同步(与定时任务同一执行体,后台异步运行)
+    pub fn trigger_now(&self) {
+        log::info!("manual sync triggered");
+        tokio::spawn(async move {
+            execute_job(Uuid::new_v4()).await;
+        });
+    }
+
     pub async fn update(&self, id: i64) -> AppResult<()> {
         let mut tx =
             self.db.pool.begin().await.change_context_lazy(|| {

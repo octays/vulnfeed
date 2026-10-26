@@ -115,3 +115,17 @@ pub async fn get_sync_data_task<S: VulnService + Send + Sync + 'static>(
         .map_err(ApiError::from)
         .map(|data| ApiSuccess::new(StatusCode::OK, data.map(Into::into)))
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RunSyncDataTaskNowHttpResponseData;
+
+#[handler]
+pub async fn run_sync_data_task_now<S: VulnService + Send + Sync + 'static>(
+    state: Data<&Ctx<S>>,
+) -> Result<ApiSuccess<RunSyncDataTaskNowHttpResponseData>, ApiError> {
+    state.sched.trigger_now();
+    Ok(ApiSuccess::new(
+        StatusCode::OK,
+        RunSyncDataTaskNowHttpResponseData,
+    ))
+}

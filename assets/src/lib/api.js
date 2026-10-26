@@ -115,3 +115,6 @@ export const getNoticePlugins = () => {
 }
 
 export default api
+
+// 立即触发一轮全量同步
+export const runSyncDataTaskNow = () => api.post('/sync_data_task/run')

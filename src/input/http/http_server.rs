@@ -108,11 +108,16 @@ fn api_routes<S: VulnService + Send + Sync + 'static>() -> impl Endpoint {
                 .nest("/notices", Route::new().at("", get(plugin::list_notice)))
                 .nest(
                     "/sync_data_task",
-                    Route::new().at(
-                        "",
-                        post(sync_data_task::create_or_update_sync_data_task::<S>::default())
-                            .get(sync_data_task::get_sync_data_task::<S>::default()),
-                    ),
+                    Route::new()
+                        .at(
+                            "",
+                            post(sync_data_task::create_or_update_sync_data_task::<S>::default())
+                                .get(sync_data_task::get_sync_data_task::<S>::default()),
+                        )
+                        .at(
+                            "/run",
+                            post(sync_data_task::run_sync_data_task_now::<S>::default()),
+                        ),
                 )
                 .nest(
                     "/ding_bot_config",

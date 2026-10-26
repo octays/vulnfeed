@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getSyncDataTask, createOrUpdateSyncDataTask } from '../../lib/api'
+import { getSyncDataTask, createOrUpdateSyncDataTask, runSyncDataTaskNow } from '../../lib/api'
 
 const SyncDataTaskPage = () => {
   const [task, setTask] = useState({
@@ -9,6 +9,7 @@ const SyncDataTaskPage = () => {
   })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+    const [running, setRunning] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
@@ -65,6 +66,21 @@ const SyncDataTaskPage = () => {
     }
   }
 
+    const handleRunNow = async () => {
+        setRunning(true)
+        setError('')
+        setSuccess('')
+        try {
+            await runSyncDataTaskNow()
+            setSuccess('已触发立即同步,后台运行中')
+        } catch (err) {
+            setError('触发立即同步失败')
+            console.error('Run sync task now error:', err)
+        } finally {
+            setRunning(false)
+        }
+    }
+
   return (
     <div className="max-w-3xl mx-auto">
       <div className="mb-8 text-center">
@@ -98,10 +114,18 @@ const SyncDataTaskPage = () => {
         </div>
       ) : (
         <div className="overflow-hidden bg-white shadow sm:rounded-lg">
-          <div className="px-4 py-5 border-b border-gray-200 sm:px-6">
+<div className="flex items-center justify-between px-4 py-5 border-b border-gray-200 sm:px-6">
             <h2 className="text-lg font-medium leading-6 text-gray-900">
               同步任务设置
             </h2>
+                    <button
+                        type="button"
+                        onClick={handleRunNow}
+                        disabled={running}
+                        className="inline-flex justify-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                    >
+                        {running ? '触发中...' : '立即运行'}
+                    </button>
           </div>
           <form onSubmit={handleSubmit} className="px-4 py-5 sm:px-6">
             <div className="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
