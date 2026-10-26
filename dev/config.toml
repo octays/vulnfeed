@@ -1,6 +1,5 @@
 [server]
 listen_addr = "0.0.0.0:9000"
-advertise_addr = "127.0.0.1:9000"
 
 [auth.jwt]
 secret = "LSJ74YUWkzGheiWMRxcH" # for development

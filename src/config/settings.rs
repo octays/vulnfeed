@@ -109,8 +109,6 @@ pub struct Config {
 pub struct Server {
     #[serde(default = "default_listen_addr")]
     pub listen_addr: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub advertise_addr: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -179,7 +177,6 @@ impl Default for Config {
         Self {
             server: Server {
                 listen_addr: default_listen_addr(),
-                advertise_addr: None,
             },
             auth: Auth {
                 jwt: Jwt {

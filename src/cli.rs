@@ -13,7 +13,7 @@ use crate::{
         services::Service,
     },
     errors::Error,
-    input::http::http_server::{self, make_acceptor_and_advertise_addr},
+    input::http::http_server::{self, make_acceptor},
     output::{
         db::{admin_user::AdminUserDao, sqlite::Db},
         plugins::{sec_notice, vuln},
@@ -69,12 +69,9 @@ impl CommandStart {
 async fn run_server(server_rt: &Runtime, config: Config) -> AppResult<()> {
     let make_error = || Error::Message("failed to start server".to_string());
     let (shutdown_tx, shutdown_rx) = mea::shutdown::new_pair();
-    let (acceptor, advertise_addr) = make_acceptor_and_advertise_addr(
-        &config.server.listen_addr,
-        config.server.advertise_addr.as_deref(),
-    )
-    .await
-    .change_context_lazy(make_error)?;
+    let acceptor = make_acceptor(&config.server.listen_addr)
+        .await
+        .change_context_lazy(make_error)?;
 
     let jwt = JWT::new(&config.auth.jwt.secret);
 
@@ -110,7 +107,7 @@ async fn run_server(server_rt: &Runtime, config: Config) -> AppResult<()> {
         jwt: Arc::new(jwt),
     };
 
-    let server = http_server::start_server(ctx, server_rt, shutdown_rx, acceptor, advertise_addr)
+    let server = http_server::start_server(ctx, server_rt, shutdown_rx, acceptor)
         .await
         .change_context_lazy(|| {
             Error::Message("A fatal error has occurred in server process.".to_string())
