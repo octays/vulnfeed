@@ -4,6 +4,7 @@ use crate::{
         admin_user::AdminUser,
         auth::LoginRequest,
         ding_bot::{CreateDingBotRequest, DingBotConfig},
+        push_channel::{CreatePushChannelRequest, PushChannel},
         security_notice::{ListSecNoticeRequest, ListSecNoticeResponseData},
         sync_data_task::{CreateSyncDataTaskRequest, SyncDataTask},
         vuln_information::{
@@ -39,6 +40,21 @@ pub trait VulnService: Clone + Send + Sync + 'static {
 
     fn get_ding_bot_config(&self) -> impl Future<Output = AppResult<Option<DingBotConfig>>> + Send;
 
+    fn list_push_channels(&self) -> impl Future<Output = AppResult<Vec<PushChannel>>> + Send;
+
+    fn create_push_channel(
+        &self,
+        req: CreatePushChannelRequest,
+    ) -> impl Future<Output = AppResult<i64>> + Send;
+
+    fn update_push_channel(
+        &self,
+        id: i64,
+        req: CreatePushChannelRequest,
+    ) -> impl Future<Output = AppResult<()>> + Send;
+
+    fn delete_push_channel(&self, id: i64) -> impl Future<Output = AppResult<()>> + Send;
+
     fn list_sec_notice(
         &self,
         req: ListSecNoticeRequest,
@@ -70,6 +86,21 @@ pub trait VulnRepository: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = AppResult<i64>> + Send;
 
     fn get_ding_bot_config(&self) -> impl Future<Output = AppResult<Option<DingBotConfig>>> + Send;
+
+    fn list_push_channels(&self) -> impl Future<Output = AppResult<Vec<PushChannel>>> + Send;
+
+    fn create_push_channel(
+        &self,
+        req: CreatePushChannelRequest,
+    ) -> impl Future<Output = AppResult<i64>> + Send;
+
+    fn update_push_channel(
+        &self,
+        id: i64,
+        req: CreatePushChannelRequest,
+    ) -> impl Future<Output = AppResult<()>> + Send;
+
+    fn delete_push_channel(&self, id: i64) -> impl Future<Output = AppResult<()>> + Send;
 
     fn list_sec_notice(
         &self,

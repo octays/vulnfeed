@@ -7,6 +7,7 @@ use crate::{
             admin_user::AdminUser,
             auth::LoginRequest,
             ding_bot::{CreateDingBotRequest, DingBotConfig},
+            push_channel::{CreatePushChannelRequest, PushChannel},
             security_notice::{ListSecNoticeRequest, ListSecNoticeResponseData},
             sync_data_task::{CreateSyncDataTaskRequest, SyncDataTask},
             vuln_information::{
@@ -18,7 +19,7 @@ use crate::{
     },
     errors::Error,
     output::db::{
-        admin_user::AdminUserDao, ding_bot_config::DingBotConfigDao,
+        admin_user::AdminUserDao, ding_bot_config::DingBotConfigDao, push_channel::PushChannelDao,
         security_notice::SecurityNoticeDao, sqlite::Db, sync_data_task::SyncDataTaskDao,
         vuln_information::VulnInformationDao,
     },
@@ -116,6 +117,54 @@ impl VulnRepository for Db {
             .await
             .change_context_lazy(|| Error::Message("failed to commit transaction".to_string()))?;
         Ok(id)
+    }
+
+    async fn list_push_channels(&self) -> AppResult<Vec<PushChannel>> {
+        let mut tx =
+            self.pool.begin().await.change_context_lazy(|| {
+                Error::Message("failed to begin transaction".to_string())
+            })?;
+        let ret = PushChannelDao::list_all(&mut tx).await?;
+        tx.commit()
+            .await
+            .change_context_lazy(|| Error::Message("failed to commit transaction".to_string()))?;
+        Ok(ret)
+    }
+
+    async fn create_push_channel(&self, req: CreatePushChannelRequest) -> AppResult<i64> {
+        let mut tx =
+            self.pool.begin().await.change_context_lazy(|| {
+                Error::Message("failed to begin transaction".to_string())
+            })?;
+        let id = PushChannelDao::create(&mut tx, req).await?;
+        tx.commit()
+            .await
+            .change_context_lazy(|| Error::Message("failed to commit transaction".to_string()))?;
+        Ok(id)
+    }
+
+    async fn update_push_channel(&self, id: i64, req: CreatePushChannelRequest) -> AppResult<()> {
+        let mut tx =
+            self.pool.begin().await.change_context_lazy(|| {
+                Error::Message("failed to begin transaction".to_string())
+            })?;
+        PushChannelDao::update(&mut tx, id, req).await?;
+        tx.commit()
+            .await
+            .change_context_lazy(|| Error::Message("failed to commit transaction".to_string()))?;
+        Ok(())
+    }
+
+    async fn delete_push_channel(&self, id: i64) -> AppResult<()> {
+        let mut tx =
+            self.pool.begin().await.change_context_lazy(|| {
+                Error::Message("failed to begin transaction".to_string())
+            })?;
+        PushChannelDao::delete(&mut tx, id).await?;
+        tx.commit()
+            .await
+            .change_context_lazy(|| Error::Message("failed to commit transaction".to_string()))?;
+        Ok(())
     }
 
     async fn get_ding_bot_config(&self) -> AppResult<Option<DingBotConfig>> {

@@ -1,6 +1,7 @@
 pub mod admin_user;
 pub mod base;
 pub mod ding_bot_config;
+pub mod push_channel;
 pub mod repository_impl;
 pub mod security_notice;
 pub mod sqlite;
