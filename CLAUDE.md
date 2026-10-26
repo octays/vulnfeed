@@ -17,10 +17,10 @@ cargo fmt                                                                     # 
 cargo test                                                                    # or: cargo nextest run --all-features
 cargo test output::plugins::vuln::kev                                         # run a single test module
 cargo run --bin vulnfeed server -c ./dev/config.toml                          # start server (runs migrations automatically)
-cargo run --bin vulnfeed create-super-user -c ./dev/config.toml -p "密码"     # create/reset the admin user
+cargo run --bin vulnfeed change-super-user-password -c ./dev/config.toml -p "新密码"  # change the admin password
 ```
 
-No external database is needed: storage is SQLite (`database.path` in the config, default `data/vulnfeed.db`). Migrations in `migrations/` run automatically on both `server` and `create-super-user` startup.
+No external database is needed: storage is SQLite (`database.path` in the config, default `data/vulnfeed.db`). Migrations in `migrations/` run automatically on `server` and `change-super-user-password` startup. On first boot with an empty `admin_user` table, `server` seeds a default super user `admin`/`admin` — change it in production via `change-super-user-password`.
 
 ### Frontend (`assets/`, React + Vite + Tailwind, managed with bun)
 

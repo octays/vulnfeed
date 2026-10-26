@@ -82,6 +82,9 @@ async fn run_server(server_rt: &Runtime, config: Config) -> AppResult<()> {
         .await
         .change_context_lazy(make_error)?;
 
+    seed_default_admin(&db)
+        .await
+        .change_context_lazy(make_error)?;
     let (sender, receiver) = mea::mpsc::unbounded::<CreateVulnInformation>();
     vuln::init(sender).change_context_lazy(make_error)?;
 
@@ -135,14 +138,13 @@ fn make_init_data_runtime() -> Runtime {
 }
 
 #[derive(Debug, clap::Parser)]
-pub struct CreateSuperUser {
+pub struct ChangeSuperUserPassword {
     #[clap(short, long, help = "Path to config file", value_hint = ValueHint::FilePath)]
     config_file: PathBuf,
-    #[clap(short, long, help = "Password")]
+    #[clap(short, long, help = "New password for the super user (4-128 chars)")]
     password: String,
 }
-
-impl CreateSuperUser {
+impl ChangeSuperUserPassword {
     pub fn run(self) -> AppResult<()> {
         error_stack::Report::set_color_mode(error_stack::fmt::ColorMode::None);
         let LoadConfigResult { config, warnings } = load_config(self.config_file)?;
@@ -155,28 +157,51 @@ impl CreateSuperUser {
         }
         let init_data_runtime = make_init_data_runtime();
         init_data_runtime
-            .block_on(run_create_super_user(config, self.password))
-            .change_context_lazy(|| Error::Message("failed to create super user".to_string()))?;
+            .block_on(run_change_super_user_password(config, self.password))
+            .change_context_lazy(|| {
+                Error::Message("failed to change super user password".to_string())
+            })?;
         Ok(())
     }
 }
-
-async fn run_create_super_user(config: Config, password: String) -> AppResult<()> {
-    let make_error = || Error::Message("failed to create super user".to_string());
-    let password_hash = compute_password_hash(&password).change_context_lazy(make_error)?;
+async fn run_change_super_user_password(config: Config, password: String) -> AppResult<()> {
+    let make_error = || Error::Message("failed to change super user password".to_string());
+    let invalid_password =
+        || Error::Message("invalid password: must be 4-128 characters long".to_string());
+    // 校验原始密码(而非其哈希),与登录侧同一套规则;不合法则显式报错退出
+    let password = AdminUserPassword::try_new(password).change_context_lazy(invalid_password)?;
+    let password_hash = compute_password_hash(password.as_ref()).change_context_lazy(make_error)?;
     let db = Db::new(&config).await.change_context_lazy(make_error)?;
     sqlx::migrate!("./migrations")
         .run(&db.pool)
         .await
         .change_context_lazy(make_error)?;
     let mut tx = db.pool.begin().await.change_context_lazy(make_error)?;
-
     let req = CreateAdminUserRequest::new(
         AdminUsername::try_new("admin").change_context_lazy(make_error)?,
         AdminUserPassword::try_new(password_hash).change_context_lazy(make_error)?,
     );
     AdminUserDao::create_super_user(&mut tx, req).await?;
     tx.commit().await.change_context_lazy(make_error)?;
-    log::info!("create super user success");
+    log::info!("change super user password success");
+    Ok(())
+}
+/// admin_user 表无 admin 记录时(首次启动)播种默认超管 admin/admin
+async fn seed_default_admin(db: &Db) -> AppResult<()> {
+    let make_error = || Error::Message("failed to seed default admin user".to_string());
+    let mut tx = db.pool.begin().await.change_context_lazy(make_error)?;
+    let name = AdminUsername::try_new("admin").change_context_lazy(make_error)?;
+    if AdminUserDao::fetch_by_name(&mut tx, &name).await?.is_none() {
+        let password_hash = compute_password_hash("admin").change_context_lazy(make_error)?;
+        let req = CreateAdminUserRequest::new(
+            name.clone(),
+            AdminUserPassword::try_new(password_hash).change_context_lazy(make_error)?,
+        );
+        AdminUserDao::create_super_user(&mut tx, req).await?;
+        log::info!(
+            "seeded default super user admin/admin; change it via change-super-user-password in production"
+        );
+    }
+    tx.commit().await.change_context_lazy(make_error)?;
     Ok(())
 }

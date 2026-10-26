@@ -30,7 +30,7 @@ const LoginPage = () => {
       // 重定向到漏洞列表页面
       navigate('/vulns')
     } catch (err) {
-      setError('登录失败，请检查用户名和密码')
+        setError(err.response?.data?.data?.message || '登录失败，请检查用户名和密码')
       console.error('Login error:', err)
     } finally {
       setLoading(false)
