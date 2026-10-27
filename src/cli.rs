@@ -13,9 +13,9 @@ use crate::{
         services::Service,
     },
     errors::Error,
-    input::http::http_server::{self, make_acceptor_and_advertise_addr},
+    input::http::http_server::{self, make_acceptor},
     output::{
-        db::{admin_user::AdminUserDao, pg::Pg},
+        db::{admin_user::AdminUserDao, sqlite::Db},
         plugins::{sec_notice, vuln},
         scheduler::Scheduler,
         sec_notcie_worker::SecNoticeWorker,
@@ -42,8 +42,13 @@ pub struct Ctx<S: VulnService + Send + Sync + 'static> {
 
 #[derive(Debug, clap::Parser)]
 pub struct CommandStart {
-    #[clap(short, long, help = "Path to config file", value_hint = ValueHint::FilePath)]
-    config_file: PathBuf,
+    #[clap(
+        short,
+        long,
+        help = "Path to config file (optional; built-in defaults apply when omitted)",
+        value_hint = ValueHint::FilePath
+    )]
+    config_file: Option<PathBuf>,
 }
 
 impl CommandStart {
@@ -69,32 +74,32 @@ impl CommandStart {
 async fn run_server(server_rt: &Runtime, config: Config) -> AppResult<()> {
     let make_error = || Error::Message("failed to start server".to_string());
     let (shutdown_tx, shutdown_rx) = mea::shutdown::new_pair();
-    let (acceptor, advertise_addr) = make_acceptor_and_advertise_addr(
-        &config.server.listen_addr,
-        config.server.advertise_addr.as_deref(),
-    )
-    .await
-    .change_context_lazy(make_error)?;
+    let acceptor = make_acceptor(&config.server.listen_addr)
+        .await
+        .change_context_lazy(make_error)?;
 
     let jwt = JWT::new(&config.auth.jwt.secret);
 
-    let db = Pg::new(&config).await.change_context_lazy(make_error)?;
+    let db = Db::new(&config).await.change_context_lazy(make_error)?;
 
     sqlx::migrate!("./migrations")
         .run(&db.pool)
         .await
         .change_context_lazy(make_error)?;
 
+    seed_default_admin(&db)
+        .await
+        .change_context_lazy(make_error)?;
     let (sender, receiver) = mea::mpsc::unbounded::<CreateVulnInformation>();
     vuln::init(sender).change_context_lazy(make_error)?;
 
-    let mut worker = Worker::new(receiver, db.clone());
+    let mut worker = Worker::new(receiver, db.clone(), config.push.backlog);
     server_rt.spawn(async move { worker.run().await });
 
     let (sec_sender, sec_receiver) = mea::mpsc::unbounded::<CreateSecurityNotice>();
     sec_notice::init(sec_sender).change_context_lazy(make_error)?;
 
-    let mut sec_worker = SecNoticeWorker::new(sec_receiver, db.clone());
+    let mut sec_worker = SecNoticeWorker::new(sec_receiver, db.clone(), config.push.backlog);
     server_rt.spawn(async move { sec_worker.run().await });
 
     let sched = Scheduler::try_new(db.clone())
@@ -110,7 +115,7 @@ async fn run_server(server_rt: &Runtime, config: Config) -> AppResult<()> {
         jwt: Arc::new(jwt),
     };
 
-    let server = http_server::start_server(ctx, server_rt, shutdown_rx, acceptor, advertise_addr)
+    let server = http_server::start_server(ctx, server_rt, shutdown_rx, acceptor)
         .await
         .change_context_lazy(|| {
             Error::Message("A fatal error has occurred in server process.".to_string())
@@ -138,14 +143,18 @@ fn make_init_data_runtime() -> Runtime {
 }
 
 #[derive(Debug, clap::Parser)]
-pub struct CreateSuperUser {
-    #[clap(short, long, help = "Path to config file", value_hint = ValueHint::FilePath)]
-    config_file: PathBuf,
-    #[clap(short, long, help = "Password")]
+pub struct ChangeSuperUserPassword {
+    #[clap(
+        short,
+        long,
+        help = "Path to config file (optional; built-in defaults apply when omitted)",
+        value_hint = ValueHint::FilePath
+    )]
+    config_file: Option<PathBuf>,
+    #[clap(short, long, help = "New password for the super user (4-128 chars)")]
     password: String,
 }
-
-impl CreateSuperUser {
+impl ChangeSuperUserPassword {
     pub fn run(self) -> AppResult<()> {
         error_stack::Report::set_color_mode(error_stack::fmt::ColorMode::None);
         let LoadConfigResult { config, warnings } = load_config(self.config_file)?;
@@ -158,24 +167,51 @@ impl CreateSuperUser {
         }
         let init_data_runtime = make_init_data_runtime();
         init_data_runtime
-            .block_on(run_create_super_user(config, self.password))
-            .change_context_lazy(|| Error::Message("failed to create super user".to_string()))?;
+            .block_on(run_change_super_user_password(config, self.password))
+            .change_context_lazy(|| {
+                Error::Message("failed to change super user password".to_string())
+            })?;
         Ok(())
     }
 }
-
-async fn run_create_super_user(config: Config, password: String) -> AppResult<()> {
-    let make_error = || Error::Message("failed to create super user".to_string());
-    let password_hash = compute_password_hash(&password).change_context_lazy(make_error)?;
-    let db = Pg::new(&config).await.change_context_lazy(make_error)?;
+async fn run_change_super_user_password(config: Config, password: String) -> AppResult<()> {
+    let make_error = || Error::Message("failed to change super user password".to_string());
+    let invalid_password =
+        || Error::Message("invalid password: must be 4-128 characters long".to_string());
+    // 校验原始密码(而非其哈希),与登录侧同一套规则;不合法则显式报错退出
+    let password = AdminUserPassword::try_new(password).change_context_lazy(invalid_password)?;
+    let password_hash = compute_password_hash(password.as_ref()).change_context_lazy(make_error)?;
+    let db = Db::new(&config).await.change_context_lazy(make_error)?;
+    sqlx::migrate!("./migrations")
+        .run(&db.pool)
+        .await
+        .change_context_lazy(make_error)?;
     let mut tx = db.pool.begin().await.change_context_lazy(make_error)?;
-
     let req = CreateAdminUserRequest::new(
         AdminUsername::try_new("admin").change_context_lazy(make_error)?,
         AdminUserPassword::try_new(password_hash).change_context_lazy(make_error)?,
     );
     AdminUserDao::create_super_user(&mut tx, req).await?;
     tx.commit().await.change_context_lazy(make_error)?;
-    log::info!("create super user success");
+    log::info!("change super user password success");
+    Ok(())
+}
+/// admin_user 表无 admin 记录时(首次启动)播种默认超管 admin/admin
+async fn seed_default_admin(db: &Db) -> AppResult<()> {
+    let make_error = || Error::Message("failed to seed default admin user".to_string());
+    let mut tx = db.pool.begin().await.change_context_lazy(make_error)?;
+    let name = AdminUsername::try_new("admin").change_context_lazy(make_error)?;
+    if AdminUserDao::fetch_by_name(&mut tx, &name).await?.is_none() {
+        let password_hash = compute_password_hash("admin").change_context_lazy(make_error)?;
+        let req = CreateAdminUserRequest::new(
+            name.clone(),
+            AdminUserPassword::try_new(password_hash).change_context_lazy(make_error)?,
+        );
+        AdminUserDao::create_super_user(&mut tx, req).await?;
+        log::info!(
+            "seeded default super user admin/admin; change it via change-super-user-password in production"
+        );
+    }
+    tx.commit().await.change_context_lazy(make_error)?;
     Ok(())
 }

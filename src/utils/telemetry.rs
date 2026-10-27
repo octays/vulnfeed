@@ -7,10 +7,58 @@ use logforth::{
     filter::{EnvFilter, env_filter::EnvFilterBuilder},
     layout,
 };
+use std::borrow::Cow;
 
 use crate::config::settings::TelemetryConfig;
 
 use super::runtime::Runtime;
+
+/// 文本布局:与 logforth 默认文本格式一致,但不输出 target(模块路径)。
+#[derive(Debug)]
+struct ConciseTextLayout;
+
+impl logforth::layout::Layout for ConciseTextLayout {
+    fn format(
+        &self,
+        record: &log::Record,
+        diagnostics: &[Box<dyn logforth::diagnostic::Diagnostic>],
+    ) -> anyhow::Result<Vec<u8>> {
+        let time = jiff::Zoned::now();
+        let level = record.level();
+        let file = record
+            .file()
+            .map(|f| f.rsplit('/').next().unwrap_or(f))
+            .unwrap_or("");
+        let line = record.line().unwrap_or_default();
+        let message = record.args();
+        let text = format!("{time:.6} {level:>5} {file}:{line} {message}");
+        struct KvWriter(String);
+        impl<'kvs> log::kv::VisitSource<'kvs> for KvWriter {
+            fn visit_pair(
+                &mut self,
+                key: log::kv::Key<'kvs>,
+                value: log::kv::Value<'kvs>,
+            ) -> Result<(), log::kv::Error> {
+                use std::fmt::Write;
+                write!(&mut self.0, " {key}={value}")?;
+                Ok(())
+            }
+        }
+        impl logforth::diagnostic::Visitor for KvWriter {
+            fn visit(&mut self, key: Cow<str>, value: Cow<str>) -> anyhow::Result<()> {
+                use std::fmt::Write;
+                write!(&mut self.0, " {key}={value}")?;
+                Ok(())
+            }
+        }
+        let mut visitor = KvWriter(text);
+        record.key_values().visit(&mut visitor)?;
+        for d in diagnostics {
+            d.visit(&mut visitor)?;
+        }
+        Ok(visitor.0.into_bytes())
+    }
+}
 
 pub fn init(
     rt: &Runtime,
@@ -56,7 +104,7 @@ fn init_logs(
             b.filter(make_rust_log_filter_with_default_env(&stderr.filter))
                 .diagnostic(FastraceDiagnostic::default())
                 .diagnostic(static_diagnostic.clone())
-                .append(append::Stderr::default())
+                .append(append::Stderr::default().with_layout(ConciseTextLayout))
         });
     }
 

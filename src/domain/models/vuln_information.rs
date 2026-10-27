@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use modql::field::Fields;
 use serde::{Deserialize, Serialize};
 
-use crate::domain::models::page_utils::PageFilter;
+use crate::domain::models::{page_utils::PageFilter, sql_json_vec::SqlJsonVecString};
 
 #[derive(
     Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, sqlx::FromRow, Deserialize,
@@ -18,12 +18,12 @@ pub struct VulnInformation {
     pub cve: String,
     pub disclosure: String,
     pub solutions: String,
-    pub reference_links: Vec<String>,
-    pub tags: Vec<String>,
-    pub github_search: Vec<String>,
+    pub reference_links: SqlJsonVecString,
+    pub tags: SqlJsonVecString,
+    pub github_search: SqlJsonVecString,
     pub source: String,
     pub source_name: String,
-    pub reasons: Vec<String>,
+    pub reasons: SqlJsonVecString,
     pub pushed: bool,
     pub detail_link: String,
     pub created_at: DateTime<Utc>,
@@ -39,12 +39,12 @@ pub struct CreateVulnInformation {
     pub cve: String,
     pub disclosure: String,
     pub solutions: String,
-    pub reference_links: Vec<String>,
-    pub tags: Vec<String>,
-    pub github_search: Vec<String>,
+    pub reference_links: SqlJsonVecString,
+    pub tags: SqlJsonVecString,
+    pub github_search: SqlJsonVecString,
     pub source: String,
     pub source_name: String,
-    pub reasons: Vec<String>,
+    pub reasons: SqlJsonVecString,
     pub pushed: bool,
     pub detail_link: String,
 }

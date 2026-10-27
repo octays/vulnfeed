@@ -85,7 +85,7 @@ impl VulnPlugin for KevPlugin {
                 severity: Severity::Critical.to_string(),
                 cve: vuln.cve_id.to_string(),
                 disclosure: vuln.date_added.to_string(),
-                reference_links,
+                reference_links: reference_links.into(),
                 solutions: vuln.required_action.to_string(),
                 source: self.link.to_string(),
                 source_name: self.name.to_string(),
@@ -93,9 +93,10 @@ impl VulnPlugin for KevPlugin {
                     vuln.vendor_project.to_string(),
                     vuln.product.to_string(),
                     "在野利用".to_string(),
-                ],
-                github_search: vec![],
-                reasons: vec![],
+                ]
+                .into(),
+                github_search: vec![].into(),
+                reasons: vec![].into(),
                 pushed: false,
                 detail_link,
             };

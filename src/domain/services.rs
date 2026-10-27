@@ -2,9 +2,10 @@ use crate::{
     AppResult,
     domain::{
         models::{
-            admin_user::AdminUser,
+            admin_user::{AdminUser, AdminUserPassword},
             auth::LoginRequest,
             ding_bot::{CreateDingBotRequest, DingBotConfig},
+            push_channel::{CreatePushChannelRequest, PushChannel},
             security_notice::{ListSecNoticeRequest, ListSecNoticeResponseData},
             sync_data_task::{CreateSyncDataTaskRequest, SyncDataTask},
             vuln_information::{
@@ -74,6 +75,44 @@ where
 
     async fn create_ding_bot_config(&self, req: CreateDingBotRequest) -> AppResult<i64> {
         let ret = self.repo.create_ding_bot_config(req).await?;
+        Ok(ret)
+    }
+
+    async fn list_push_channels(&self) -> AppResult<Vec<PushChannel>> {
+        let ret = self.repo.list_push_channels().await?;
+        Ok(ret)
+    }
+
+    async fn create_push_channel(&self, req: CreatePushChannelRequest) -> AppResult<i64> {
+        let ret = self.repo.create_push_channel(req).await?;
+        Ok(ret)
+    }
+
+    async fn update_push_channel(&self, id: i64, req: CreatePushChannelRequest) -> AppResult<()> {
+        self.repo.update_push_channel(id, req).await
+    }
+
+    async fn delete_push_channel(&self, id: i64) -> AppResult<()> {
+        self.repo.delete_push_channel(id).await
+    }
+
+    async fn change_admin_password(
+        &self,
+        old_password: AdminUserPassword,
+        new_password: AdminUserPassword,
+    ) -> AppResult<()> {
+        self.repo
+            .change_admin_password(old_password, new_password)
+            .await
+    }
+
+    async fn push_vuln_manually(&self, id: i64) -> AppResult<(usize, usize)> {
+        let ret = self.repo.push_vuln_manually(id).await?;
+        Ok(ret)
+    }
+
+    async fn push_sec_notice_manually(&self, id: i64) -> AppResult<(usize, usize)> {
+        let ret = self.repo.push_sec_notice_manually(id).await?;
         Ok(ret)
     }
 

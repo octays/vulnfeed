@@ -13,19 +13,25 @@ pub struct LoadConfigResult {
     pub warnings: Vec<String>,
 }
 
-pub fn load_config(config_file: PathBuf) -> AppResult<LoadConfigResult> {
-    let content = std::fs::read_to_string(&config_file).change_context_lazy(|| {
-        Error::Message(format!(
-            "failed to read config file {}",
-            config_file.display()
-        ))
-    })?;
+pub fn load_config(config_file: Option<PathBuf>) -> AppResult<LoadConfigResult> {
+    let content = match config_file {
+        Some(config_file) => std::fs::read_to_string(&config_file).change_context_lazy(|| {
+            Error::Message(format!(
+                "failed to read config file {}",
+                config_file.display()
+            ))
+        })?,
+        // 未提供配置文件时使用内置默认配置(与 dev/config.toml 一致),env 覆盖仍然生效
+        None => toml_edit::ser::to_string(&Config::default()).change_context_lazy(|| {
+            Error::Message("failed to serialize default config".to_string())
+        })?,
+    };
 
     let mut config = DocumentMut::from_str(&content)
         .change_context_lazy(|| Error::Message("failed to parse config file".to_string()))?;
 
     let env = std::env::vars()
-        .filter(|(key, _)| key.starts_with("VULNFEED_"))
+        .filter(|(key, _)| key.starts_with("VULNFEED_CONFIG_"))
         .collect::<std::collections::HashMap<String, String>>();
 
     fn set_toml_path(
@@ -101,6 +107,8 @@ pub struct Config {
     pub server: Server,
     pub auth: Auth,
     pub database: Database,
+    #[serde(default)]
+    pub push: PushConfig,
     pub telemetry: TelemetryConfig,
 }
 
@@ -109,8 +117,6 @@ pub struct Config {
 pub struct Server {
     #[serde(default = "default_listen_addr")]
     pub listen_addr: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub advertise_addr: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -131,16 +137,28 @@ pub struct Jwt {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Database {
-    #[serde(default = "default_database_host")]
-    pub host: String,
-    #[serde(default = "default_database_port")]
-    pub port: u16,
-    #[serde(default = "default_database_username")]
-    pub username: String,
-    #[serde(default = "default_database_password")]
-    pub password: String,
-    #[serde(default = "default_database_name")]
-    pub database_name: String,
+    #[serde(default = "default_database_path")]
+    pub path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PushConfig {
+    /// 是否自动补推已入库但未推送的条目;false 时此类条目只能手动推送
+    #[serde(default = "default_push_backlog")]
+    pub backlog: bool,
+}
+
+impl Default for PushConfig {
+    fn default() -> Self {
+        Self {
+            backlog: default_push_backlog(),
+        }
+    }
+}
+
+fn default_push_backlog() -> bool {
+    false
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -187,20 +205,15 @@ impl Default for Config {
         Self {
             server: Server {
                 listen_addr: default_listen_addr(),
-                advertise_addr: None,
             },
             auth: Auth {
                 jwt: Jwt {
-                    secret: "secret".to_string(),
+                    secret: "LSJ74YUWkzGheiWMRxcH".to_string(),
                     expiration: 604800,
                 },
             },
             database: Database {
-                host: default_database_host(),
-                port: default_database_port(),
-                username: default_database_username(),
-                password: default_database_password(),
-                database_name: default_database_name(),
+                path: default_database_path(),
             },
             telemetry: TelemetryConfig {
                 logs: LogsConfig {
@@ -214,6 +227,7 @@ impl Default for Config {
                     }),
                 },
             },
+            push: PushConfig::default(),
         }
     }
 }
@@ -243,28 +257,8 @@ pub const fn known_option_entries() -> &'static [OptionEntry] {
             ent_type: "integer",
         },
         OptionEntry {
-            env_name: "VULNFEED_CONFIG_DATABASE_HOST",
-            ent_path: "database.host",
-            ent_type: "string",
-        },
-        OptionEntry {
-            env_name: "VULNFEED_CONFIG_DATABASE_PORT",
-            ent_path: "database.port",
-            ent_type: "integer",
-        },
-        OptionEntry {
-            env_name: "VULNFEED_CONFIG_DATABASE_NAME",
-            ent_path: "database.database_name",
-            ent_type: "string",
-        },
-        OptionEntry {
-            env_name: "VULNFEED_CONFIG_DATABASE_USERNAME",
-            ent_path: "database.username",
-            ent_type: "string",
-        },
-        OptionEntry {
-            env_name: "VULNFEED_CONFIG_DATABASE_PASSWORD",
-            ent_path: "database.password",
+            env_name: "VULNFEED_CONFIG_DATABASE_PATH",
+            ent_path: "database.path",
             ent_type: "string",
         },
     ]
@@ -275,29 +269,13 @@ fn default_listen_addr() -> String {
 }
 
 fn default_jwt_secret() -> String {
-    "secret".to_string()
+    "LSJ74YUWkzGheiWMRxcH".to_string()
 }
 
 fn default_jwt_expiration() -> u64 {
     604800
 }
 
-fn default_database_host() -> String {
-    "localhost".to_string()
-}
-
-fn default_database_port() -> u16 {
-    5432
-}
-
-fn default_database_username() -> String {
-    "postgres".to_string()
-}
-
-fn default_database_password() -> String {
-    "postgres".to_string()
-}
-
-fn default_database_name() -> String {
-    "vulnfeed".to_string()
+fn default_database_path() -> String {
+    "data/vulnfeed.db".to_string()
 }

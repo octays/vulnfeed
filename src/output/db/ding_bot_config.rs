@@ -1,4 +1,4 @@
-use sqlx::{Postgres, Transaction};
+use sqlx::{Sqlite, Transaction};
 
 use crate::{
     AppResult,
@@ -14,7 +14,7 @@ impl Dao for DingBotConfigDao {
 
 impl DingBotConfigDao {
     pub async fn create(
-        tx: &mut Transaction<'_, Postgres>,
+        tx: &mut Transaction<'_, Sqlite>,
         req: CreateDingBotRequest,
     ) -> AppResult<i64> {
         let ding_bot_config: Option<DingBotConfig> = dao_first::<Self, _>(tx).await?;
@@ -26,7 +26,7 @@ impl DingBotConfigDao {
         Ok(ret)
     }
 
-    pub async fn first(tx: &mut Transaction<'_, Postgres>) -> AppResult<Option<DingBotConfig>> {
+    pub async fn first(tx: &mut Transaction<'_, Sqlite>) -> AppResult<Option<DingBotConfig>> {
         let ding_bot_config = dao_first::<Self, _>(tx).await?;
         Ok(ding_bot_config)
     }

@@ -115,3 +115,26 @@ export const getNoticePlugins = () => {
 }
 
 export default api
+
+// 立即触发一轮全量同步
+export const runSyncDataTaskNow = () => api.post('/sync_data_task/run')
+
+// 推送渠道管理
+export const listPushChannels = () => api.get('/push_channels')
+
+export const createPushChannel = (channel) => api.post('/push_channels', channel)
+
+export const updatePushChannel = (id, channel) => api.put(`/push_channels/${id}`, channel)
+
+export const deletePushChannel = (id) => api.delete(`/push_channels/${id}`)
+
+export const testPushChannel = (id) => api.post(`/push_channels/${id}/test`)
+
+// 修改管理员密码
+export const changePassword = (oldPassword, newPassword) =>
+    api.post('/account/password', { old_password: oldPassword, new_password: newPassword })
+
+// 手动推送单条漏洞/公告到所有启用渠道
+export const pushVuln = (id) => api.post(`/vulns/${id}/push`)
+
+export const pushSecNotice = (id) => api.post(`/sec_notice/${id}/push`)

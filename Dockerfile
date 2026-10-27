@@ -1,22 +1,19 @@
 # Build stage for frontend
-FROM node:18-alpine AS frontend-build
-
-# Install specific version of pnpm that matches the lockfile
-RUN npm install -g pnpm@8
+FROM oven/bun:1-alpine AS frontend-build
 
 WORKDIR /app
 
 # Copy package files first for better caching
-COPY assets/package.json assets/pnpm-lock.yaml ./
+COPY assets/package.json assets/bun.lock ./
 
 # Install dependencies - this will be cached if package files don't change
-RUN pnpm install --frozen-lockfile
+RUN bun install --frozen-lockfile
 
 # Copy source code after dependencies are installed
 COPY assets/ .
 
 # Build frontend
-RUN pnpm build
+RUN bun run build
 
 # Build stage for backend with better caching
 FROM rust:1.89-alpine AS backend-build
@@ -29,7 +26,6 @@ RUN apk add --no-cache \
     musl-dev \
     openssl-dev \
     openssl-libs-static \
-    postgresql-dev \
     git
 
 WORKDIR /app
@@ -50,8 +46,8 @@ COPY src/ src/
 # Copy migrations
 COPY migrations/ migrations/
 
-# Copy frontend build output
-COPY --from=frontend-build /app/public/ public/
+# Copy frontend build output; build.rs stages it into public/ where rust-embed picks it up
+COPY --from=frontend-build /app/public/ assets/public/
 
 # Build the application
 RUN cargo build --release

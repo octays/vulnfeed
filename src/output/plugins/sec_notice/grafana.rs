@@ -161,8 +161,7 @@ impl GrafanaNoticePlugin {
                     // 从链接中提取ID
                     let id = detail_link
                         .split('/')
-                        .filter(|s| !s.is_empty())
-                        .next_back()
+                        .rfind(|s| !s.is_empty())
                         .unwrap_or(&detail_link)
                         .to_string();
 

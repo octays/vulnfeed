@@ -43,7 +43,7 @@ impl From<AdminUsername> for Value {
 
 #[nutype(
     sanitize(trim),
-    validate(not_empty, len_char_min = 8, len_char_max = 128),
+    validate(not_empty, len_char_min = 4, len_char_max = 128),
     derive(
         Clone, Debug, Display, PartialEq, Eq, PartialOrd, Ord, Hash, AsRef, Deref, Borrow, TryFrom
     )

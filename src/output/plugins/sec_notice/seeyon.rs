@@ -141,7 +141,7 @@ impl SeeyonNoticePlugin {
             .filter(|item| item.pid == v5_id)
             .collect();
 
-        filtered_items.sort_by(|a, b| b.id.cmp(&a.id));
+        filtered_items.sort_by_key(|item| std::cmp::Reverse(item.id));
         filtered_items.truncate(3);
 
         // 为每个项目获取详细信息

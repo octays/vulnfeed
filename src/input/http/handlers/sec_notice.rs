@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use poem::{
     handler,
     http::StatusCode,
-    web::{Data, Query},
+    web::{Data, Path, Query},
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -126,4 +126,26 @@ pub async fn list_sec_notice<S: VulnService + Send + Sync + 'static>(
             };
             ApiSuccess::new(StatusCode::OK, response_data)
         })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ManualPushHttpResponseData {
+    pub success: usize,
+    pub total: usize,
+}
+
+#[handler]
+pub async fn push_sec_notice<S: VulnService + Send + Sync + 'static>(
+    state: Data<&Ctx<S>>,
+    Path(id): Path<i64>,
+) -> Result<ApiSuccess<ManualPushHttpResponseData>, ApiError> {
+    let (success, total) = state
+        .vuln_service
+        .push_sec_notice_manually(id)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(ApiSuccess::new(
+        StatusCode::OK,
+        ManualPushHttpResponseData { success, total },
+    ))
 }
