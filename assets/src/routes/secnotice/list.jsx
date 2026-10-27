@@ -29,11 +29,10 @@ const SecNoticeListPage = () => {
   const handlePushNotice = async (notice) => {
         setPushingId(notice.id)
         try {
-            const res = await pushSecNotice(notice.id)
-            const { success, total } = res.data.data
-            window.alert(`已推送到 ${success}/${total} 个渠道`)
+            await pushSecNotice(notice.id)
         } catch (err) {
-            window.alert(err.response?.data?.data?.message || '推送失败')
+            setError(err.response?.data?.data?.message || '推送失败')
+            console.error('Push error:', err)
         } finally {
             setPushingId(null)
         }

@@ -30,11 +30,10 @@ const VulnerabilityListPage = () => {
   const handlePushVuln = async (vuln) => {
         setPushingId(vuln.id)
         try {
-            const res = await pushVuln(vuln.id)
-            const { success, total } = res.data.data
-            window.alert(`已推送到 ${success}/${total} 个渠道`)
+            await pushVuln(vuln.id)
         } catch (err) {
-            window.alert(err.response?.data?.data?.message || '推送失败')
+            setError(err.response?.data?.data?.message || '推送失败')
+            console.error('Push error:', err)
         } finally {
             setPushingId(null)
         }
