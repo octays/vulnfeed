@@ -16,13 +16,19 @@ use crate::{
 pub struct SecNoticeWorker {
     pub receiver: UnboundedReceiver<CreateSecurityNotice>,
     pub db: Arc<Db>,
+    pub push_backlog: bool,
 }
 
 impl SecNoticeWorker {
-    pub fn new(receiver: UnboundedReceiver<CreateSecurityNotice>, db: Db) -> Self {
+    pub fn new(
+        receiver: UnboundedReceiver<CreateSecurityNotice>,
+        db: Db,
+        push_backlog: bool,
+    ) -> Self {
         SecNoticeWorker {
             receiver,
             db: Arc::new(db),
+            push_backlog,
         }
     }
 
@@ -34,7 +40,7 @@ impl SecNoticeWorker {
                     continue;
                 }
                 Ok((id, created)) => {
-                    if created {
+                    if created || self.push_backlog {
                         self.push_channels(id).await?;
                     }
                 }

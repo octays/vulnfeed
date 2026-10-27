@@ -15,3 +15,9 @@ max_files = 64
 
 [telemetry.logs.stderr]
 filter = "INFO"
+
+[push]
+# 自动推送策略:默认只自动推送本轮新爬取的条目;
+# 已入库未推送的(如当时推送失败/未配渠道)不会自动补推,只能手动推送。
+# backlog = true 时,每次同步会自动补推所有未推送条目。
+backlog = false

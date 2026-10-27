@@ -101,6 +101,8 @@ pub struct Config {
     pub server: Server,
     pub auth: Auth,
     pub database: Database,
+    #[serde(default)]
+    pub push: PushConfig,
     pub telemetry: TelemetryConfig,
 }
 
@@ -131,6 +133,26 @@ pub struct Jwt {
 pub struct Database {
     #[serde(default = "default_database_path")]
     pub path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PushConfig {
+    /// 是否自动补推已入库但未推送的条目;false 时此类条目只能手动推送
+    #[serde(default = "default_push_backlog")]
+    pub backlog: bool,
+}
+
+impl Default for PushConfig {
+    fn default() -> Self {
+        Self {
+            backlog: default_push_backlog(),
+        }
+    }
+}
+
+fn default_push_backlog() -> bool {
+    false
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -199,6 +221,7 @@ impl Default for Config {
                     }),
                 },
             },
+            push: PushConfig::default(),
         }
     }
 }

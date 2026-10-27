@@ -88,13 +88,13 @@ async fn run_server(server_rt: &Runtime, config: Config) -> AppResult<()> {
     let (sender, receiver) = mea::mpsc::unbounded::<CreateVulnInformation>();
     vuln::init(sender).change_context_lazy(make_error)?;
 
-    let mut worker = Worker::new(receiver, db.clone());
+    let mut worker = Worker::new(receiver, db.clone(), config.push.backlog);
     server_rt.spawn(async move { worker.run().await });
 
     let (sec_sender, sec_receiver) = mea::mpsc::unbounded::<CreateSecurityNotice>();
     sec_notice::init(sec_sender).change_context_lazy(make_error)?;
 
-    let mut sec_worker = SecNoticeWorker::new(sec_receiver, db.clone());
+    let mut sec_worker = SecNoticeWorker::new(sec_receiver, db.clone(), config.push.backlog);
     server_rt.spawn(async move { sec_worker.run().await });
 
     let sched = Scheduler::try_new(db.clone())

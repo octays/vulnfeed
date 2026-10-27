@@ -17,13 +17,19 @@ use crate::{
 pub struct Worker {
     pub receiver: UnboundedReceiver<CreateVulnInformation>,
     pub db: Arc<Db>,
+    pub push_backlog: bool,
 }
 
 impl Worker {
-    pub fn new(receiver: UnboundedReceiver<CreateVulnInformation>, db: Db) -> Self {
+    pub fn new(
+        receiver: UnboundedReceiver<CreateVulnInformation>,
+        db: Db,
+        push_backlog: bool,
+    ) -> Self {
         Worker {
             receiver,
             db: Arc::new(db),
+            push_backlog,
         }
     }
 
@@ -35,7 +41,7 @@ impl Worker {
                     continue;
                 }
                 Ok((id, as_new_vuln)) => {
-                    if as_new_vuln {
+                    if as_new_vuln || self.push_backlog {
                         self.push_channels(id).await?;
                     }
                 }
