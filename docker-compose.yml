@@ -1,13 +1,10 @@
-version: "3.8"
-
 services:
   vulnfeed:
-    image: fantasticzf/vulnfeed:latest
+    image: 1228022817/vulnfeed:latest
     restart: always
     volumes:
-      - "./config/config.toml:/app/config.toml"
       - "./data/:/app/data/"
     privileged: true
-    command: ["./vulnfeed", "server", "--config-file", "config.toml"]
+    command: ["server", "--config-file", "config.toml"]
     ports:
       - "9000:9000"

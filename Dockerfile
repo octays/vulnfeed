@@ -1,12 +1,12 @@
-# 将本地 cargo-zigbuild 产物直接打入精简镜像(需先 make zig-build)
-# 构建: make docker-zig [ARCH=amd64|arm64]
-ARG TARGET_TRIPLE=x86_64-unknown-linux-gnu
+# 将本地 cargo-zigbuild 产物直接打入精简镜像(buildx 多平台)
+# 构建: make docker(单架构) / IMAGE=xxx make docker-multi(多平台推送)
+ARG TARGETPLATFORM=linux/arm64
 FROM debian:bookworm-slim
-ARG TARGET_TRIPLE
+ARG TARGETPLATFORM
 ENV TZ=Asia/Shanghai
 WORKDIR /app
-COPY dist/docker/${TARGET_TRIPLE}/vulnfeed /app/vulnfeed
-COPY dist/docker/${TARGET_TRIPLE}/config.toml /app/config.toml
+COPY dist/docker/${TARGETPLATFORM}/vulnfeed /app/vulnfeed
+COPY dist/docker/${TARGETPLATFORM}/config.toml /app/config.toml
 RUN chmod +x /app/vulnfeed && mkdir -p /app/data /app/logs
 EXPOSE 9000
 VOLUME ["/app/data", "/app/logs"]
