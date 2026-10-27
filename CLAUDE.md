@@ -16,7 +16,7 @@ cargo clippy --all-targets --all-features --tests --benches -- -D warnings   # C
 cargo fmt                                                                     # rustfmt.toml options are nightly-only; stable warns and ignores them
 cargo test                                                                    # or: cargo nextest run --all-features
 cargo test output::plugins::vuln::kev                                         # run a single test module
-cargo run --bin vulnfeed server -c ./dev/config.toml                          # start server (runs migrations automatically)
+cargo run --bin vulnfeed server                                   # start server (config file optional; built-in defaults = dev/config.toml; migrations run automatically)
 cargo run --bin vulnfeed change-super-user-password -c ./dev/config.toml -p "新密码"  # change the admin password
 ```
 
@@ -36,6 +36,12 @@ bun run build  # outputs to assets/public/
 ### Static asset embedding
 
 `cargo build` embeds the frontend into the binary: `build.rs` builds the SPA with bun when `assets/public` is missing (skipped when bun is absent or `VULNFEED_SKIP_FRONTEND_BUILD=1`; the build still succeeds with no frontend), stages it into `public/` (gitignored except `.gitkeep`), and emits `VULNFEED_EMBEDDED_ASSETS_HASH` so asset changes recompile the crate. rust-embed has `debug-embed` enabled — assets are embedded in debug builds too.
+
+### Make
+
+`make help` lists all targets. Highlights: `make check|clippy|fmt|test`,
+`make run` (no config file needed), `make package` (release binary +
+default config.toml under `dist/vulnfeed-<version>.tar.gz`).
 
 ### Docker
 

@@ -13,13 +13,19 @@ pub struct LoadConfigResult {
     pub warnings: Vec<String>,
 }
 
-pub fn load_config(config_file: PathBuf) -> AppResult<LoadConfigResult> {
-    let content = std::fs::read_to_string(&config_file).change_context_lazy(|| {
-        Error::Message(format!(
-            "failed to read config file {}",
-            config_file.display()
-        ))
-    })?;
+pub fn load_config(config_file: Option<PathBuf>) -> AppResult<LoadConfigResult> {
+    let content = match config_file {
+        Some(config_file) => std::fs::read_to_string(&config_file).change_context_lazy(|| {
+            Error::Message(format!(
+                "failed to read config file {}",
+                config_file.display()
+            ))
+        })?,
+        // 未提供配置文件时使用内置默认配置(与 dev/config.toml 一致),env 覆盖仍然生效
+        None => toml_edit::ser::to_string(&Config::default()).change_context_lazy(|| {
+            Error::Message("failed to serialize default config".to_string())
+        })?,
+    };
 
     let mut config = DocumentMut::from_str(&content)
         .change_context_lazy(|| Error::Message("failed to parse config file".to_string()))?;
@@ -202,7 +208,7 @@ impl Default for Config {
             },
             auth: Auth {
                 jwt: Jwt {
-                    secret: "secret".to_string(),
+                    secret: "LSJ74YUWkzGheiWMRxcH".to_string(),
                     expiration: 604800,
                 },
             },
@@ -263,7 +269,7 @@ fn default_listen_addr() -> String {
 }
 
 fn default_jwt_secret() -> String {
-    "secret".to_string()
+    "LSJ74YUWkzGheiWMRxcH".to_string()
 }
 
 fn default_jwt_expiration() -> u64 {
@@ -271,5 +277,5 @@ fn default_jwt_expiration() -> u64 {
 }
 
 fn default_database_path() -> String {
-    "vulnfeed.db".to_string()
+    "data/vulnfeed.db".to_string()
 }

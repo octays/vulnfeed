@@ -42,8 +42,13 @@ pub struct Ctx<S: VulnService + Send + Sync + 'static> {
 
 #[derive(Debug, clap::Parser)]
 pub struct CommandStart {
-    #[clap(short, long, help = "Path to config file", value_hint = ValueHint::FilePath)]
-    config_file: PathBuf,
+    #[clap(
+        short,
+        long,
+        help = "Path to config file (optional; built-in defaults apply when omitted)",
+        value_hint = ValueHint::FilePath
+    )]
+    config_file: Option<PathBuf>,
 }
 
 impl CommandStart {
@@ -139,8 +144,13 @@ fn make_init_data_runtime() -> Runtime {
 
 #[derive(Debug, clap::Parser)]
 pub struct ChangeSuperUserPassword {
-    #[clap(short, long, help = "Path to config file", value_hint = ValueHint::FilePath)]
-    config_file: PathBuf,
+    #[clap(
+        short,
+        long,
+        help = "Path to config file (optional; built-in defaults apply when omitted)",
+        value_hint = ValueHint::FilePath
+    )]
+    config_file: Option<PathBuf>,
     #[clap(short, long, help = "New password for the super user (4-128 chars)")]
     password: String,
 }
