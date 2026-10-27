@@ -54,7 +54,7 @@ Hexagonal-style layout with the flow: **scheduler → plugins → mpsc channel �
 - `src/output/` — infrastructure:
   - `db/` — sqlx (SQLite pool, WAL) + sea-query. `base.rs` holds the generic DAO helpers (`dao_create`, `dao_upsert`, `DaoQueryBuilder`, …); per-table DAOs are thin wrappers. `repository_impl.rs` implements `VulnRepository` for the pool wrapper `Db`.
   - `plugins/vuln/` and `plugins/sec_notice/` — the two scraper families. Each plugin implements `VulnPlugin`/`SecNoticePlugin`, fetches/parses its source, and sends `Create*` records over its unbounded mpsc sender.
-  - `worker.rs` / `sec_notcie_worker.rs` — consume the channels: dedupe by `key`, enrich with GitHub/nuclei POC search (only for new CVEs), upsert, and push new items to all enabled `push_channel` rows (markdown rendered with Tera templates in `push/`).
+  - `worker.rs` / `sec_notcie_worker.rs` — consume the channels: dedupe by `key` and merge same-CVE records across sources (first source wins, worst severity kept, pushed once), enrich with GitHub/nuclei POC search (only for new CVEs), upsert, and push new items to all enabled `push_channel` rows (markdown rendered with Tera templates in `push/`).
   - `scheduler.rs` — tokio-cron-scheduler job (interval from the `sync_task` DB row) that runs all plugins' `update()` concurrently via JoinSet.
 - `src/config/settings.rs` — TOML config (`dev/config.toml`) with `VULNFEED_CONFIG_*` env overrides; `deny_unknown_fields`, unknown env vars are an error.
 
