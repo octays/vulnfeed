@@ -117,6 +117,9 @@ pub struct Config {
 pub struct Server {
     #[serde(default = "default_listen_addr")]
     pub listen_addr: String,
+    /// 静态资源目录;空 = 使用内嵌资源(单二进制),非空则从磁盘目录伺服 SPA
+    #[serde(default = "default_static_dir")]
+    pub static_dir: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -205,6 +208,7 @@ impl Default for Config {
         Self {
             server: Server {
                 listen_addr: default_listen_addr(),
+                static_dir: default_static_dir(),
             },
             auth: Auth {
                 jwt: Jwt {
@@ -247,6 +251,11 @@ pub const fn known_option_entries() -> &'static [OptionEntry] {
             ent_type: "string",
         },
         OptionEntry {
+            env_name: "VULNFEED_CONFIG_SERVER_STATIC_DIR",
+            ent_path: "server.static_dir",
+            ent_type: "string",
+        },
+        OptionEntry {
             env_name: "VULNFEED_CONFIG_AUTH_JWT_SECRET",
             ent_path: "auth.jwt.secret",
             ent_type: "string",
@@ -262,6 +271,10 @@ pub const fn known_option_entries() -> &'static [OptionEntry] {
             ent_type: "string",
         },
     ]
+}
+
+fn default_static_dir() -> String {
+    String::new()
 }
 
 fn default_listen_addr() -> String {
