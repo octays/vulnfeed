@@ -54,6 +54,14 @@ pub trait VulnService: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = AppResult<()>> + Send;
 
     fn delete_push_channel(&self, id: i64) -> impl Future<Output = AppResult<()>> + Send;
+    fn push_vuln_manually(&self, id: i64)
+    -> impl Future<Output = AppResult<(usize, usize)>> + Send;
+
+    fn push_sec_notice_manually(
+        &self,
+        id: i64,
+    ) -> impl Future<Output = AppResult<(usize, usize)>> + Send;
+
     fn change_admin_password(
         &self,
         old_password: AdminUserPassword,
@@ -106,6 +114,14 @@ pub trait VulnRepository: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = AppResult<()>> + Send;
 
     fn delete_push_channel(&self, id: i64) -> impl Future<Output = AppResult<()>> + Send;
+    fn push_vuln_manually(&self, id: i64)
+    -> impl Future<Output = AppResult<(usize, usize)>> + Send;
+
+    fn push_sec_notice_manually(
+        &self,
+        id: i64,
+    ) -> impl Future<Output = AppResult<(usize, usize)>> + Send;
+
     fn change_admin_password(
         &self,
         old_password: AdminUserPassword,

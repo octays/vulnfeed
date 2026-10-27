@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { getVulnerabilities, getPlugins } from '../../lib/api'
+import { getVulnerabilities, getPlugins, pushVuln } from '../../lib/api'
 
 const VulnerabilityListPage = () => {
   const [vulnerabilities, setVulnerabilities] = useState([])
@@ -10,6 +10,7 @@ const VulnerabilityListPage = () => {
   const [pageSize] = useState(10)
   const [totalCount, setTotalCount] = useState(0)
   const [plugins, setPlugins] = useState([])
+    const [pushingId, setPushingId] = useState(null)
   // 新的筛选条件状态
   const [filters, setFilters] = useState({
     cve: '',
@@ -26,7 +27,20 @@ const VulnerabilityListPage = () => {
     fetchVulnerabilities()
   }, [pageNo, filters])
 
-  const fetchPlugins = async () => {
+  const handlePushVuln = async (vuln) => {
+        setPushingId(vuln.id)
+        try {
+            const res = await pushVuln(vuln.id)
+            const { success, total } = res.data.data
+            window.alert(`已推送到 ${success}/${total} 个渠道`)
+        } catch (err) {
+            window.alert(err.response?.data?.data?.message || '推送失败')
+        } finally {
+            setPushingId(null)
+        }
+    }
+
+const fetchPlugins = async () => {
     try {
       const response = await getPlugins()
       setPlugins(response.data.data)
@@ -261,6 +275,14 @@ const handleSourceFilterChange = (e) => {
                           }`}>
                             {vuln.pushed ? '已推送' : '未推送'}
                           </span>
+                          <button
+                              type="button"
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handlePushVuln(vuln) }}
+                              disabled={pushingId === vuln.id}
+                              className="ml-2 inline-flex items-center px-2.5 py-0.5 border border-indigo-300 rounded-full text-xs font-medium text-indigo-700 bg-white hover:bg-indigo-50 disabled:opacity-50"
+                          >
+                              {pushingId === vuln.id ? '推送中' : '推送'}
+                          </button>
                         </div>
                       </div>
                       <div className="mt-2">

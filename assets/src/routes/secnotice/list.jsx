@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { getSecNotices, getNoticeSources } from '../../lib/api'
+import { getSecNotices, getNoticeSources, pushSecNotice } from '../../lib/api'
 
 const SecNoticeListPage = () => {
   const [secNotices, setSecNotices] = useState([])
@@ -10,6 +10,7 @@ const SecNoticeListPage = () => {
   const [pageSize] = useState(10)
   const [totalCount, setTotalCount] = useState(0)
   const [sources, setSources] = useState([])
+    const [pushingId, setPushingId] = useState(null)
   // 新的筛选条件状态
   const [filters, setFilters] = useState({
     title: '',
@@ -25,7 +26,20 @@ const SecNoticeListPage = () => {
     fetchSecNotices()
   }, [pageNo, filters])
 
-  const fetchSources = async () => {
+  const handlePushNotice = async (notice) => {
+        setPushingId(notice.id)
+        try {
+            const res = await pushSecNotice(notice.id)
+            const { success, total } = res.data.data
+            window.alert(`已推送到 ${success}/${total} 个渠道`)
+        } catch (err) {
+            window.alert(err.response?.data?.data?.message || '推送失败')
+        } finally {
+            setPushingId(null)
+        }
+    }
+
+const fetchSources = async () => {
     try {
       const response = await getNoticeSources()
       setSources(response.data.data)
@@ -227,6 +241,14 @@ const SecNoticeListPage = () => {
                           }`}>
                             {notice.pushed ? '已推送' : '未推送'}
                           </span>
+                          <button
+                              type="button"
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handlePushNotice(notice) }}
+                              disabled={pushingId === notice.id}
+                              className="ml-2 inline-flex items-center px-2.5 py-0.5 border border-indigo-300 rounded-full text-xs font-medium text-indigo-700 bg-white hover:bg-indigo-50 disabled:opacity-50"
+                          >
+                              {pushingId === notice.id ? '推送中' : '推送'}
+                          </button>
                         </div>
                       </div>
                       <div className="mt-2">

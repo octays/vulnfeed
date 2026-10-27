@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use poem::{
     handler,
     http::StatusCode,
-    web::{Data, Query},
+    web::{Data, Path, Query},
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -171,4 +171,26 @@ pub async fn get_vuln_information_detail<S: VulnService + Send + Sync + 'static>
                 .ok_or(ApiError::BadRequest("Vulnerability not found".to_string()))
         })
         .map(|data| ApiSuccess::new(StatusCode::OK, data))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ManualPushHttpResponseData {
+    pub success: usize,
+    pub total: usize,
+}
+
+#[handler]
+pub async fn push_vuln_information<S: VulnService + Send + Sync + 'static>(
+    state: Data<&Ctx<S>>,
+    Path(id): Path<i64>,
+) -> Result<ApiSuccess<ManualPushHttpResponseData>, ApiError> {
+    let (success, total) = state
+        .vuln_service
+        .push_vuln_manually(id)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(ApiSuccess::new(
+        StatusCode::OK,
+        ManualPushHttpResponseData { success, total },
+    ))
 }

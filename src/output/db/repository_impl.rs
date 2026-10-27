@@ -193,6 +193,44 @@ impl VulnRepository for Db {
         Ok(())
     }
 
+    async fn push_vuln_manually(&self, id: i64) -> AppResult<(usize, usize)> {
+        let make_error = || Error::Message("failed to push vuln manually".to_string());
+        let mut tx = self.pool.begin().await.change_context_lazy(make_error)?;
+        let channels = PushChannelDao::list_enabled(&mut tx).await?;
+        if channels.is_empty() {
+            return Err(Error::BadRequest("无启用的推送渠道".to_string()).into());
+        }
+        let vuln = VulnInformationDao::fetch_by_id(&mut tx, id).await?;
+        tx.commit().await.change_context_lazy(make_error)?;
+        let Some(v) = vuln else {
+            return Err(Error::BadRequest("漏洞不存在".to_string()).into());
+        };
+        let title = v.title.clone();
+        let msg = crate::output::push::render_vulninfo(v)
+            .map_err(|e| Error::Message(format!("render vuln info failed: {e:?}")))?;
+        let ok = crate::output::push::push_markdown_all(&channels, title, msg).await?;
+        Ok((ok, channels.len()))
+    }
+
+    async fn push_sec_notice_manually(&self, id: i64) -> AppResult<(usize, usize)> {
+        let make_error = || Error::Message("failed to push sec notice manually".to_string());
+        let mut tx = self.pool.begin().await.change_context_lazy(make_error)?;
+        let channels = PushChannelDao::list_enabled(&mut tx).await?;
+        if channels.is_empty() {
+            return Err(Error::BadRequest("无启用的推送渠道".to_string()).into());
+        }
+        let sec_notice = SecurityNoticeDao::fetch_by_id(&mut tx, id).await?;
+        tx.commit().await.change_context_lazy(make_error)?;
+        let Some(n) = sec_notice else {
+            return Err(Error::BadRequest("安全公告不存在".to_string()).into());
+        };
+        let title = n.title.clone();
+        let msg = crate::output::push::render_sec_notice(n)
+            .map_err(|e| Error::Message(format!("render sec notice failed: {e:?}")))?;
+        let ok = crate::output::push::push_markdown_all(&channels, title, msg).await?;
+        Ok((ok, channels.len()))
+    }
+
     async fn get_ding_bot_config(&self) -> AppResult<Option<DingBotConfig>> {
         let mut tx =
             self.pool.begin().await.change_context_lazy(|| {

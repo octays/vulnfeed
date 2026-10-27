@@ -133,3 +133,8 @@ export const testPushChannel = (id) => api.post(`/push_channels/${id}/test`)
 // 修改管理员密码
 export const changePassword = (oldPassword, newPassword) =>
     api.post('/account/password', { old_password: oldPassword, new_password: newPassword })
+
+// 手动推送单条漏洞/公告到所有启用渠道
+export const pushVuln = (id) => api.post(`/vulns/${id}/push`)
+
+export const pushSecNotice = (id) => api.post(`/sec_notice/${id}/push`)

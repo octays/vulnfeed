@@ -106,6 +106,16 @@ where
             .await
     }
 
+    async fn push_vuln_manually(&self, id: i64) -> AppResult<(usize, usize)> {
+        let ret = self.repo.push_vuln_manually(id).await?;
+        Ok(ret)
+    }
+
+    async fn push_sec_notice_manually(&self, id: i64) -> AppResult<(usize, usize)> {
+        let ret = self.repo.push_sec_notice_manually(id).await?;
+        Ok(ret)
+    }
+
     async fn list_sec_notice(
         &self,
         req: ListSecNoticeRequest,

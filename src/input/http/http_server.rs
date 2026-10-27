@@ -104,6 +104,10 @@ fn api_routes<S: VulnService + Send + Sync + 'static>() -> impl Endpoint {
                         .at(
                             "/:id",
                             get(vuln_information::get_vuln_information_detail::<S>::default()),
+                        )
+                        .at(
+                            "/:id/push",
+                            post(vuln_information::push_vuln_information::<S>::default()),
                         ),
                 )
                 .nest("/plugins", Route::new().at("", get(plugin::list_plugins)))
@@ -153,7 +157,12 @@ fn api_routes<S: VulnService + Send + Sync + 'static>() -> impl Endpoint {
                 )
                 .nest(
                     "/sec_notice",
-                    Route::new().at("", get(sec_notice::list_sec_notice::<S>::default())),
+                    Route::new()
+                        .at("", get(sec_notice::list_sec_notice::<S>::default()))
+                        .at(
+                            "/:id/push",
+                            post(sec_notice::push_sec_notice::<S>::default()),
+                        ),
                 )
                 .with(AuthMiddleware::<S>::default()),
         )
