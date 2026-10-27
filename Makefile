@@ -29,7 +29,6 @@ docker-zig: zig-build ## 构建容器镜像:本地 zigbuild 二进制拷贝进 d
 	@cp target/$(ZIGTRIPLE)/release/$(BIN) "dist/docker/$(PLAT)/"
 	@cp dev/config.toml "dist/docker/$(PLAT)/config.toml"
 	docker buildx build --platform $(PLAT) -t $(IMAGE_REPO):$(ARCH) --load .
-	@rm -rf dist/docker
 	@echo "镜像完成: $(IMAGE_REPO):$(ARCH)"
 
 docker-multi: ## buildx 多平台构建并推送: make docker-multi [IMAGE_REPO=...] [IMAGE_TAG=...]
@@ -49,7 +48,6 @@ docker-multi: ## buildx 多平台构建并推送: make docker-multi [IMAGE_REPO=
 		cp dev/config.toml "dist/docker/$$plat/config.toml" || exit 1; \
 	done
 	docker buildx build --platform linux/amd64,linux/arm64 -t $(IMAGE_REPO):$(IMAGE_TAG) --push .
-	@rm -rf dist/docker
 	@echo "多平台镜像已推送: $(IMAGE_REPO):$(IMAGE_TAG)"
 
 zig-build: ## 本地 cargo-zigbuild 交叉编译(当前 ZIGTRIPLE)
