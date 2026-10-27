@@ -35,7 +35,7 @@ bun run build  # outputs to assets/public/
 
 ### Static asset embedding
 
-`cargo build` embeds the frontend into the binary: `build.rs` builds the SPA with bun when `assets/public` is missing (skipped when bun is absent or `VULNFEED_SKIP_FRONTEND_BUILD=1`; the build still succeeds with no frontend), stages it into `public/` (gitignored except `.gitkeep`), and emits `VULNFEED_EMBEDDED_ASSETS_HASH` so asset changes recompile the crate. rust-embed has `debug-embed` enabled — assets are embedded in debug builds too.
+`cargo build` embeds the frontend into the binary: `build.rs` builds the SPA with bun when `assets/public` is missing (skipped when bun is absent or `VULNFEED_SKIP_FRONTEND_BUILD=1`; the build still succeeds with no frontend), stages it into `public/` (gitignored except `.gitkeep`), and emits `VULNFEED_EMBEDDED_ASSETS_HASH` so asset changes recompile the crate. rust-embed has `debug-embed` enabled — assets are embedded in debug builds too. Alternatively set `server.static_dir` (or `VULNFEED_CONFIG_SERVER_STATIC_DIR`) to serve the SPA from a directory on disk; served by `SpaDirEndpoint` with an index.html fallback.
 
 ### Make
 
@@ -43,13 +43,13 @@ bun run build  # outputs to assets/public/
 `make run` (no config file needed), `make package` (release binary +
 default config.toml under `dist/vulnfeed-<version>.tar.gz`), and
 `make zig-build|zig-package|docker-zig` for cross-platform cargo-zigbuild
-builds and binary-only images (Dockerfile.zig copies local zigbuild
+builds and binary-only images (Dockerfile copies local zigbuild
 artifacts into debian:bookworm-slim).
 
 ### Docker
 
 ```bash
-docker build -t vulnfeed:latest .   # builds frontend with bun, embeds it into the binary image
+make docker                                      # image copies local zigbuild artifacts (run make zig-build first)
 ```
 
 docker-compose runs only the `vulnfeed` service; SQLite data persists via the `./data/` volume mount.

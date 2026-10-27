@@ -12,7 +12,10 @@ use rust_embed::RustEmbed;
 #[folder = "public/"]
 struct Assets;
 
-use crate::input::http::{handlers::ding_bot_config, spa_endpoint::SpaFileEndpoint};
+use crate::input::http::{
+    handlers::ding_bot_config,
+    spa_endpoint::{SpaDirEndpoint, SpaFileEndpoint},
+};
 
 use crate::{
     cli::Ctx,
@@ -63,8 +66,14 @@ pub async fn start_server<S: VulnService + Send + Sync + 'static>(
     let server_fut = {
         let wg_clone = wg.clone();
         let shutdown_clone = shutdown_rx_server.clone();
+        let static_dir = ctx.config.server.static_dir.clone();
+        let spa = if static_dir.is_empty() {
+            SpaFileEndpoint::<Assets>::new().boxed()
+        } else {
+            SpaDirEndpoint::new(&static_dir).boxed()
+        };
         let route = Route::new()
-            .nest("/", SpaFileEndpoint::<Assets>::new())
+            .nest("/", spa)
             .nest("/api", api_routes::<S>())
             .data(ctx.clone());
         let listen_addr = acceptor.local_addr()[0].clone();

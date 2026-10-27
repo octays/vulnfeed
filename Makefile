@@ -54,8 +54,8 @@ package: release ## 打包:release 二进制 + 默认配置 -> dist/vulnfeed-<ve
 	@tar -czf $(DIST)/vulnfeed-$(VERSION).tar.gz -C $(DIST) vulnfeed-$(VERSION)
 	@echo "打包完成: $(DIST)/vulnfeed-$(VERSION).tar.gz"
 
-docker: ## 构建 Docker 镜像
-	docker build --push -t vulnfeed:latest .
+docker: ## 构建 Docker 镜像(本地 zigbuild 产物拷贝式)
+	@$(MAKE) docker-zig
 
 clean: ## cargo clean
 	$(CARGO) clean
@@ -86,6 +86,6 @@ docker-zig: zig-build ## 本地 zigbuild 二进制打入镜像: make docker-zig 
 	@mkdir -p dist/docker/$(ZIGTRIPLE)
 	@cp target/$(ZIGTRIPLE)/release/$(BIN) dist/docker/$(ZIGTRIPLE)/
 	@cp dev/config.toml dist/docker/$(ZIGTRIPLE)/config.toml
-	docker build -f Dockerfile.zig --build-arg TARGET_TRIPLE=$(ZIGTRIPLE) -t vulnfeed:$(ARCH)-zig .
+	docker build -f Dockerfile --build-arg TARGET_TRIPLE=$(ZIGTRIPLE) -t vulnfeed:$(ARCH)-zig .
 	@rm -rf dist/docker
 	@echo "镜像完成: vulnfeed:$(ARCH)-zig"
