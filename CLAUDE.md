@@ -39,12 +39,10 @@ bun run build  # outputs to assets/public/
 
 ### Make
 
-`make help` lists all targets. Highlights: `make check|clippy|fmt|test`,
-`make run` (no config file needed), `make package` (release binary +
-default config.toml under `dist/vulnfeed-<version>.tar.gz`), and
-`make zig-build|zig-package|docker-zig` for cross-platform cargo-zigbuild
-builds and binary-only images (Dockerfile copies local zigbuild
-artifacts into debian:bookworm-slim).
+The Makefile only builds the container image: `make docker` (default
+goal, alias of `docker-zig`) cross-compiles locally via cargo-zigbuild
+(`zig-build`, `make ARCH=amd64|arm64` to pick a target) and copies the
+binary into a debian:bookworm-slim image via Dockerfile.
 
 ### Docker
 
