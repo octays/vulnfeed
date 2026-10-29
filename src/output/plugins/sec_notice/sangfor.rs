@@ -70,7 +70,7 @@ impl SangforNoticePlugin {
         // 创建带有 site-id 头的 HTTP 客户端
         let mut headers = HeaderMap::new();
         headers.insert("site-id", header::HeaderValue::from_static("1684919726105"));
-        let http_client = HttpClient::try_new_with_headers(headers)?;
+        let http_client = HttpClient::try_new_sync_with_headers(headers)?;
 
         let sangfor = SangforNoticePlugin {
             name: "SangforPlugin".to_string(),

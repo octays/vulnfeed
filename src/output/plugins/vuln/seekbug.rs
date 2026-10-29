@@ -50,7 +50,7 @@ impl VulnPlugin for SeekBugPlugin {
 
 impl SeekBugPlugin {
     pub fn try_new(sender: UnboundedSender<CreateVulnInformation>) -> AppResult<SeekBugPlugin> {
-        let http_client = HttpClient::try_new()?;
+        let http_client = HttpClient::try_new_sync()?;
         let seebug = SeekBugPlugin {
             name: "SeeBugPlugin".to_string(),
             display_name: "Seebug 漏洞平台".to_string(),

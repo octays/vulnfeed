@@ -94,13 +94,21 @@ async fn run_server(server_rt: &Runtime, config: Config) -> AppResult<()> {
     vuln::init(sender).change_context_lazy(make_error)?;
 
     let mut worker = Worker::new(receiver, db.clone(), config.push.backlog);
-    server_rt.spawn(async move { worker.run().await });
+    server_rt.spawn(async move {
+        if let Err(e) = worker.run().await {
+            log::error!("Vulnerability worker stopped: {e:?}");
+        }
+    });
 
     let (sec_sender, sec_receiver) = mea::mpsc::unbounded::<CreateSecurityNotice>();
     sec_notice::init(sec_sender).change_context_lazy(make_error)?;
 
     let mut sec_worker = SecNoticeWorker::new(sec_receiver, db.clone(), config.push.backlog);
-    server_rt.spawn(async move { sec_worker.run().await });
+    server_rt.spawn(async move {
+        if let Err(e) = sec_worker.run().await {
+            log::error!("Security notice worker stopped: {e:?}");
+        }
+    });
 
     let sched = Scheduler::try_new(db.clone())
         .await

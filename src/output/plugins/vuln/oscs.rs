@@ -55,7 +55,7 @@ impl VulnPlugin for OscsPlugin {
 
 impl OscsPlugin {
     pub fn try_new(sender: UnboundedSender<CreateVulnInformation>) -> AppResult<OscsPlugin> {
-        let http_client = HttpClient::try_new()?;
+        let http_client = HttpClient::try_new_sync()?;
         let oscs = OscsPlugin {
             name: "OscsPlugin".to_string(),
             display_name: "OSCS开源安全情报预警".to_string(),

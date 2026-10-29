@@ -69,7 +69,7 @@ impl SecNoticePlugin for VmwareNoticePlugin {
 
 impl VmwareNoticePlugin {
     pub fn try_new(sender: UnboundedSender<CreateSecurityNotice>) -> AppResult<VmwareNoticePlugin> {
-        let http_client = HttpClient::try_new()?;
+        let http_client = HttpClient::try_new_sync()?;
         let vmware = VmwareNoticePlugin {
             name: "VmwarePlugin".to_string(),
             display_name: "Vmware 安全公告".to_string(),

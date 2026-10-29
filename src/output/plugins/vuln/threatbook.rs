@@ -107,7 +107,7 @@ impl ThreatBookPlugin {
             "Accept-Language",
             header::HeaderValue::from_static("zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6"),
         );
-        let http_client = HttpClient::try_new_with_headers(headers)?;
+        let http_client = HttpClient::try_new_sync_with_headers(headers)?;
         let thread_book = ThreatBookPlugin {
             name: "ThreatBookPlugin".to_string(),
             display_name: "微步在线研究响应中心-漏洞通告".to_string(),

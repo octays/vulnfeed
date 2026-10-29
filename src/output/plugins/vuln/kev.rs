@@ -27,7 +27,7 @@ pub struct KevPlugin {
 
 impl KevPlugin {
     pub fn try_new(sender: UnboundedSender<CreateVulnInformation>) -> AppResult<KevPlugin> {
-        let http_client = HttpClient::try_new()?;
+        let http_client = HttpClient::try_new_sync()?;
         let kv = KevPlugin {
             name: "KevPlugin".to_string(),
             display_name: "Known Exploited Vulnerabilities Catalog".to_string(),

@@ -1,0 +1,1 @@
+ALTER TABLE sync_task ADD COLUMN skip_tls_verify BOOLEAN NOT NULL DEFAULT FALSE;

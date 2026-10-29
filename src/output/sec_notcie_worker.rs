@@ -36,12 +36,14 @@ impl SecNoticeWorker {
         while let Some(req) = self.receiver.recv().await {
             match self.store(req).await {
                 Err(e) => {
-                    log::error!("Failed to store vuln information: {:?}", e);
+                    log::error!("Failed to store security notice: {:?}", e);
                     continue;
                 }
                 Ok((id, created)) => {
                     if created || self.push_backlog {
-                        self.push_channels(id).await?;
+                        if let Err(e) = self.push_channels(id).await {
+                            log::error!("Failed to push security notice {id}: {e:?}");
+                        }
                     }
                 }
             }

@@ -68,7 +68,7 @@ impl TongtechNoticePlugin {
     pub fn try_new(
         sender: UnboundedSender<CreateSecurityNotice>,
     ) -> AppResult<TongtechNoticePlugin> {
-        let http_client = HttpClient::try_new()?;
+        let http_client = HttpClient::try_new_sync()?;
         let tongtech = TongtechNoticePlugin {
             name: "TongtechPlugin".to_string(),
             display_name: "东方通安全公告".to_string(),

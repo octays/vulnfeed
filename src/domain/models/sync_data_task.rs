@@ -10,6 +10,7 @@ pub struct SyncDataTask {
     pub name: String,
     pub interval_minutes: i32,
     pub status: bool,
+    pub skip_tls_verify: bool,
     pub job_id: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -20,6 +21,7 @@ pub struct CreateSyncDataTaskRequest {
     pub name: SyncDataTaskName,
     pub interval_minutes: SyncDataTaskIntervalMinutes,
     pub status: bool,
+    pub skip_tls_verify: bool,
     pub job_id: Option<String>,
 }
 
@@ -33,6 +35,7 @@ impl CreateSyncDataTaskRequest {
             name,
             interval_minutes,
             status,
+            skip_tls_verify: false,
             job_id: None,
         }
     }

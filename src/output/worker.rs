@@ -42,7 +42,9 @@ impl Worker {
                 }
                 Ok((id, as_new_vuln)) => {
                     if as_new_vuln || self.push_backlog {
-                        self.push_channels(id).await?;
+                        if let Err(e) = self.push_channels(id).await {
+                            log::error!("Failed to push vuln information {id}: {e:?}");
+                        }
                     }
                 }
             }

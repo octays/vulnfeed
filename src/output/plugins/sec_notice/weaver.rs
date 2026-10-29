@@ -73,7 +73,7 @@ impl SecNoticePlugin for WeaverNoticePlugin {
 
 impl WeaverNoticePlugin {
     pub fn try_new(sender: UnboundedSender<CreateSecurityNotice>) -> AppResult<WeaverNoticePlugin> {
-        let http_client = HttpClient::try_new()?;
+        let http_client = HttpClient::try_new_sync()?;
         let weaver = WeaverNoticePlugin {
             name: "WeaverPlugin".to_string(),
             display_name: "泛微ECOLOGY安全补丁包".to_string(),

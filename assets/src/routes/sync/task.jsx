@@ -6,6 +6,7 @@ const SyncDataTaskPage = () => {
     name: '',
     interval_minutes: 60,
     status: true,
+    skip_tls_verify: false,
   })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -29,6 +30,7 @@ const SyncDataTaskPage = () => {
           name: data.name,
           interval_minutes: data.interval_minutes,
           status: data.status,
+          skip_tls_verify: data.skip_tls_verify,
         })
       }
     } catch (err) {
@@ -166,6 +168,18 @@ const SyncDataTaskPage = () => {
                 <p className="mt-2 text-sm text-gray-500">
                   设置数据同步的时间间隔，范围1-1440分钟（1天）
                 </p>
+              </div>
+
+              <div className="sm:col-span-4">
+                <div className="flex items-start">
+                  <div className="flex items-center h-5">
+                    <input id="skip_tls_verify" name="skip_tls_verify" type="checkbox" checked={task.skip_tls_verify} onChange={handleChange} className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" />
+                  </div>
+                  <div className="ml-3 text-sm">
+                    <label htmlFor="skip_tls_verify" className="font-medium text-gray-700">跳过同步源的证书校验</label>
+                    <p className="text-gray-500">仅在信任同步源及网络环境时启用；无法验证服务器身份。</p>
+                  </div>
+                </div>
               </div>
 
               <div className="sm:col-span-4">

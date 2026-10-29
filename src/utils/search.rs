@@ -22,7 +22,10 @@ pub async fn search_github_poc(cve_id: &str) -> Vec<String> {
 
 pub async fn search_nuclei_pr(cve_id: &str) -> AppResult<Vec<String>> {
     log::info!("search nuclei PR of {}", cve_id);
-    let page = octocrab::instance()
+    let client = octocrab::Octocrab::builder()
+        .build()
+        .map_err(|e| Error::Message(format!("Failed to initialize GitHub client: {e}")))?;
+    let page = client
         .pulls("projectdiscovery", "nuclei-templates")
         .list()
         .per_page(100)
@@ -52,7 +55,10 @@ pub async fn search_github_repo(cve_id: &str) -> AppResult<Vec<String>> {
         "language:Python language:JavaScript language:C language:C++ language:Java language:PHP language:Ruby language:Rust language:C# created:>{} {}",
         last_year, cve_id
     );
-    let page = octocrab::instance()
+    let client = octocrab::Octocrab::builder()
+        .build()
+        .map_err(|e| Error::Message(format!("Failed to initialize GitHub client: {e}")))?;
+    let page = client
         .search()
         .repositories(&query)
         .per_page(100)

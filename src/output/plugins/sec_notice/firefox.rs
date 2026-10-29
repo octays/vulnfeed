@@ -72,7 +72,7 @@ impl FirefoxNoticePlugin {
     pub fn try_new(
         sender: UnboundedSender<CreateSecurityNotice>,
     ) -> AppResult<FirefoxNoticePlugin> {
-        let http_client = HttpClient::try_new()?;
+        let http_client = HttpClient::try_new_sync()?;
         let firefox = FirefoxNoticePlugin {
             name: "FirefoxPlugin".to_string(),
             display_name: "Firefox安全公告".to_string(),

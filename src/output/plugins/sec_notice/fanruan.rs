@@ -63,7 +63,7 @@ impl FanRuanNoticePlugin {
     pub fn try_new(
         sender: UnboundedSender<CreateSecurityNotice>,
     ) -> AppResult<FanRuanNoticePlugin> {
-        let http_client = HttpClient::try_new()?;
+        let http_client = HttpClient::try_new_sync()?;
         let fanruan = FanRuanNoticePlugin {
             name: "FanRuanPlugin".to_string(),
             display_name: "帆软安全公告".to_string(),

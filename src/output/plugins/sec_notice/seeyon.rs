@@ -80,7 +80,7 @@ impl SecNoticePlugin for SeeyonNoticePlugin {
 
 impl SeeyonNoticePlugin {
     pub fn try_new(sender: UnboundedSender<CreateSecurityNotice>) -> AppResult<SeeyonNoticePlugin> {
-        let http_client = HttpClient::try_new()?;
+        let http_client = HttpClient::try_new_sync()?;
         let seeyon = SeeyonNoticePlugin {
             name: "SeeyonPlugin".to_string(),
             display_name: "致远OA安全公告".to_string(),

@@ -54,7 +54,7 @@ impl TiPlugin {
             header::HeaderValue::from_static("https://ti.qianxin.com/"),
         );
 
-        let http_client = HttpClient::try_new_with_headers(headers)?;
+        let http_client = HttpClient::try_new_sync_with_headers(headers)?;
         let ti = TiPlugin {
             name: "QiAnXinTiPlugin".to_string(),
             display_name: "奇安信威胁情报中心".to_string(),

@@ -15,6 +15,7 @@ use crate::{
             vuln::{get_registry, list_plugin_names},
         },
     },
+    utils::http_client::set_skip_sync_cert_verify,
 };
 
 pub struct Scheduler {
@@ -102,6 +103,7 @@ impl Scheduler {
             tx.commit().await.change_context_lazy(|| {
                 Error::Message("Failed to commit transaction".to_string())
             })?;
+            set_skip_sync_cert_verify(task.skip_tls_verify);
             Ok(())
         } else {
             log::error!("Failed to find scheduled task in database by id {}", id);
@@ -118,6 +120,7 @@ impl Scheduler {
                 Error::Message("failed to begin transaction".to_string())
             })?;
         if let Some(task) = SyncDataTaskDao::first(&mut tx).await? {
+            set_skip_sync_cert_verify(task.skip_tls_verify);
             log::info!(
                 "Found scheduled task: name={}, minute={}, status={}",
                 task.name,
@@ -158,7 +161,7 @@ async fn execute_job(_uuid: Uuid) {
             if let Some(plugin) = plugins.get::<str>(&plugin_name)
                 && let Err(e) = plugin.update(1).await
             {
-                log::error!("Plugin update failed for {}: {}", plugin_name, e)
+                log::error!("Plugin update failed for {}: {:?}", plugin_name, e)
             }
         });
     }
@@ -171,7 +174,7 @@ async fn execute_job(_uuid: Uuid) {
             if let Some(notice) = notice.get::<str>(&name)
                 && let Err(e) = notice.update(1).await
             {
-                log::error!("Sec notice update failed for {}: {}", name, e)
+                log::error!("Sec notice update failed for {}: {:?}", name, e)
             }
         });
     }

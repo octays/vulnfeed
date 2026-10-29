@@ -74,7 +74,7 @@ impl YongYouNoticePlugin {
     pub fn try_new(
         sender: UnboundedSender<CreateSecurityNotice>,
     ) -> AppResult<YongYouNoticePlugin> {
-        let http_client = HttpClient::try_new()?;
+        let http_client = HttpClient::try_new_sync()?;
         let yongyou: YongYouNoticePlugin = YongYouNoticePlugin {
             name: "YongYouPlugin".to_string(),
             display_name: "用友安全中心".to_string(),

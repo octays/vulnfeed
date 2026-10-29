@@ -69,7 +69,7 @@ impl VulnPlugin for AVDPlugin {
 
 impl AVDPlugin {
     pub fn try_new(sender: UnboundedSender<CreateVulnInformation>) -> AppResult<AVDPlugin> {
-        let http_client = HttpClient::try_new()?;
+        let http_client = HttpClient::try_new_sync()?;
         let avd = AVDPlugin {
             name: "AVDPlugin".to_string(),
             display_name: "阿里云漏洞库".to_string(),

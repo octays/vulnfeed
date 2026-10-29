@@ -68,7 +68,7 @@ impl GrafanaNoticePlugin {
     pub fn try_new(
         sender: UnboundedSender<CreateSecurityNotice>,
     ) -> AppResult<GrafanaNoticePlugin> {
-        let http_client = HttpClient::try_new()?;
+        let http_client = HttpClient::try_new_sync()?;
         let grafana = GrafanaNoticePlugin {
             name: "GrafanaPlugin".to_string(),
             display_name: "Grafana安全公告".to_string(),

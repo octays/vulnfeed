@@ -208,7 +208,7 @@ impl VulnPlugin for WizPlugin {
 
 impl WizPlugin {
     pub fn try_new(sender: UnboundedSender<CreateVulnInformation>) -> AppResult<WizPlugin> {
-        let http_client = HttpClient::try_new()?;
+        let http_client = HttpClient::try_new_sync()?;
         let wiz = WizPlugin {
             name: "WizPlugin".to_string(),
             display_name: "Wiz漏洞库".to_string(),

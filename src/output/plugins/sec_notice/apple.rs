@@ -69,7 +69,7 @@ impl SecNoticePlugin for AppleNoticePlugin {
 
 impl AppleNoticePlugin {
     pub fn try_new(sender: UnboundedSender<CreateSecurityNotice>) -> AppResult<AppleNoticePlugin> {
-        let http_client = HttpClient::try_new()?;
+        let http_client = HttpClient::try_new_sync()?;
         let apple = AppleNoticePlugin {
             name: "ApplePlugin".to_string(),
             display_name: "Apple安全公告".to_string(),

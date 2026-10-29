@@ -63,7 +63,7 @@ impl SmartbiNoticePlugin {
     pub fn try_new(
         sender: UnboundedSender<CreateSecurityNotice>,
     ) -> AppResult<SmartbiNoticePlugin> {
-        let http_client = HttpClient::try_new()?;
+        let http_client = HttpClient::try_new_sync()?;
         let smartbi = SmartbiNoticePlugin {
             name: "SmartbiPlugin".to_string(),
             display_name: "Smartbi安全补丁包".to_string(),

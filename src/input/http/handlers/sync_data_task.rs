@@ -23,6 +23,8 @@ pub struct CreateSyncDataTaskHttpRequestBody {
     pub name: String,
     pub interval_minutes: u32,
     pub status: bool,
+    #[serde(default)]
+    pub skip_tls_verify: bool,
 }
 
 impl CreateSyncDataTaskHttpRequestBody {
@@ -35,6 +37,7 @@ impl CreateSyncDataTaskHttpRequestBody {
             name,
             interval_minutes,
             status: self.status,
+            skip_tls_verify: self.skip_tls_verify,
             job_id: None,
         })
     }
@@ -91,6 +94,7 @@ pub struct GetSyncDataTaskHttpResponseData {
     pub name: String,
     pub interval_minutes: i32,
     pub status: bool,
+    pub skip_tls_verify: bool,
 }
 
 impl From<SyncDataTask> for GetSyncDataTaskHttpResponseData {
@@ -100,6 +104,7 @@ impl From<SyncDataTask> for GetSyncDataTaskHttpResponseData {
             name: sync_data_task.name.to_string(),
             interval_minutes: sync_data_task.interval_minutes,
             status: sync_data_task.status,
+            skip_tls_verify: sync_data_task.skip_tls_verify,
         }
     }
 }
