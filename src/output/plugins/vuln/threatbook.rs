@@ -9,7 +9,7 @@ use crate::{
     domain::models::vuln_information::{CreateVulnInformation, Severity},
     errors::Error,
     output::plugins::vuln::{VulnPlugin, register_plugin},
-    utils::{http_client::HttpClient, util::check_over_two_month},
+    utils::http_client::HttpClient,
 };
 
 const HOME_PAGE_URL: &str = "https://x.threatbook.com/v5/node/vul_module/homePage";
@@ -47,7 +47,10 @@ impl VulnPlugin for ThreatBookPlugin {
             .await
             .map_err(|e| Error::Message(format!("Failed to parse home page response: {}", e)))?;
         for v in home_page_resp.data.high_risk {
-            let disclosure = v.vuln_update_time.clone();
+            let disclosure = v
+                .vuln_publish_time
+                .filter(|date| !date.trim().is_empty())
+                .unwrap_or_default();
 
             let mut tags = Vec::new();
             if let Some(is_0day) = v.is_0day
@@ -64,11 +67,6 @@ impl VulnPlugin for ThreatBookPlugin {
             if v.solution {
                 tags.push("有修复方案".to_string());
             }
-            let mut pushed = false;
-            if let Some(publish_date) = v.vuln_publish_time {
-                pushed = check_over_two_month(publish_date.as_str(), v.vuln_update_time.as_str())
-                    .unwrap_or_default();
-            }
             let detail_link = format!("https://x.threatbook.com/v5/vul/{}", v.id);
             let data = CreateVulnInformation {
                 key: v.id,
@@ -84,7 +82,7 @@ impl VulnPlugin for ThreatBookPlugin {
                 tags: tags.into(),
                 reasons: Vec::new().into(),
                 github_search: vec![].into(),
-                pushed,
+                pushed: false,
                 detail_link,
             };
             self.sender.send(data).change_context_lazy(|| {

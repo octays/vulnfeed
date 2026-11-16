@@ -4,8 +4,8 @@ import HomePage from './routes/home'
 import VulnerabilityListPage from './routes/vuln/list'
 import VulnerabilityDetailPage from './routes/vuln/detail'
 import SyncDataTaskPage from './routes/sync/task'
+import StacksPage from './routes/stacks'
 import PluginListPage from './routes/plugins/list'
-import PushChannelPage from './routes/push/channel'
 import SecNoticeListPage from './routes/secnotice/list'
 import ProtectedRoute from './components/ProtectedRoute'
 import Layout from './components/Layout'
@@ -56,21 +56,15 @@ function App() {
           }
         />
         <Route
+          path="/stacks"
+          element={<ProtectedRoute><Layout><StacksPage /></Layout></ProtectedRoute>}
+        />
+        <Route
           path="/plugins"
           element={
             <ProtectedRoute>
               <Layout>
                 <PluginListPage />
-              </Layout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-                path="/push/channels"
-          element={
-            <ProtectedRoute>
-              <Layout>
-                        <PushChannelPage />
               </Layout>
             </ProtectedRoute>
           }

@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use poem::{
     handler,
     http::StatusCode,
-    web::{Data, Path, Query},
+    web::{Data, Query},
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -58,6 +58,9 @@ pub struct SecNoticeData {
     pub pushed: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub stacks: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub receipt: Option<crate::input::http::handlers::receipts::ReceiptSummary>,
 }
 
 impl SecNoticeData {
@@ -76,6 +79,8 @@ impl SecNoticeData {
             pushed: notice.pushed,
             created_at: notice.created_at,
             updated_at: notice.updated_at,
+            stacks: notice.stacks,
+            receipt: None,
         }
     }
 }
@@ -114,38 +119,25 @@ pub async fn list_sec_notice<S: VulnService + Send + Sync + 'static>(
     Query(body): Query<ListSecNoticeRequestBody>,
 ) -> Result<ApiSuccess<ListSecNoticeHttpResponseData>, ApiError> {
     let req = body.try_into_domain()?;
-    state
+    let data = state
         .vuln_service
         .list_sec_notice(req)
         .await
-        .map_err(ApiError::from)
-        .map(|data| {
-            let response_data = ListSecNoticeHttpResponseData {
-                data: data.data.into_iter().map(SecNoticeData::new).collect(),
-                total_count: data.total,
-            };
-            ApiSuccess::new(StatusCode::OK, response_data)
-        })
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct ManualPushHttpResponseData {
-    pub success: usize,
-    pub total: usize,
-}
-
-#[handler]
-pub async fn push_sec_notice<S: VulnService + Send + Sync + 'static>(
-    state: Data<&Ctx<S>>,
-    Path(id): Path<i64>,
-) -> Result<ApiSuccess<ManualPushHttpResponseData>, ApiError> {
-    let (success, total) = state
-        .vuln_service
-        .push_sec_notice_manually(id)
-        .await
         .map_err(ApiError::from)?;
-    Ok(ApiSuccess::new(
-        StatusCode::OK,
-        ManualPushHttpResponseData { success, total },
-    ))
+    let mut response_data = ListSecNoticeHttpResponseData {
+        data: data.data.into_iter().map(SecNoticeData::new).collect(),
+        total_count: data.total,
+    };
+    let ids: Vec<i64> = response_data.data.iter().map(|notice| notice.id).collect();
+    let summaries =
+        crate::input::http::handlers::receipts::receipt_summaries(&state.db.orm(), "notice", &ids)
+            .await
+            .map_err(|e| {
+                log::error!("receipt summary failed: {e}");
+                ApiError::InternalServerError("receipt summary failed".into())
+            })?;
+    for notice in response_data.data.iter_mut() {
+        notice.receipt = summaries.get(&notice.id).cloned();
+    }
+    Ok(ApiSuccess::new(StatusCode::OK, response_data))
 }

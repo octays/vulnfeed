@@ -25,6 +25,17 @@ pub struct CreateSyncDataTaskHttpRequestBody {
     pub status: bool,
     #[serde(default)]
     pub skip_tls_verify: bool,
+    #[serde(default)]
+    pub push_history: bool,
+    #[serde(default)]
+    pub auto_receipts: bool,
+    #[serde(default)]
+    pub auto_remind: bool,
+    #[serde(default)]
+    pub allow_response_deletion: bool,
+    /// Escalation target @-ed from the 3rd receipt reminder on (ou_…).
+    #[serde(default)]
+    pub remind_escalate_open_id: String,
 }
 
 impl CreateSyncDataTaskHttpRequestBody {
@@ -38,6 +49,11 @@ impl CreateSyncDataTaskHttpRequestBody {
             interval_minutes,
             status: self.status,
             skip_tls_verify: self.skip_tls_verify,
+            push_history: self.push_history,
+            auto_receipts: self.auto_receipts,
+            auto_remind: self.auto_remind,
+            allow_response_deletion: self.allow_response_deletion,
+            remind_escalate_open_id: self.remind_escalate_open_id,
             job_id: None,
         })
     }
@@ -95,6 +111,11 @@ pub struct GetSyncDataTaskHttpResponseData {
     pub interval_minutes: i32,
     pub status: bool,
     pub skip_tls_verify: bool,
+    pub push_history: bool,
+    pub auto_receipts: bool,
+    pub auto_remind: bool,
+    pub allow_response_deletion: bool,
+    pub remind_escalate_open_id: String,
 }
 
 impl From<SyncDataTask> for GetSyncDataTaskHttpResponseData {
@@ -105,6 +126,11 @@ impl From<SyncDataTask> for GetSyncDataTaskHttpResponseData {
             interval_minutes: sync_data_task.interval_minutes,
             status: sync_data_task.status,
             skip_tls_verify: sync_data_task.skip_tls_verify,
+            push_history: sync_data_task.push_history,
+            auto_receipts: sync_data_task.auto_receipts,
+            auto_remind: sync_data_task.auto_remind,
+            allow_response_deletion: sync_data_task.allow_response_deletion,
+            remind_escalate_open_id: sync_data_task.remind_escalate_open_id,
         }
     }
 }

@@ -1,5 +1,5 @@
+use sea_orm::DatabaseTransaction;
 use sea_query::Value;
-use sqlx::{Sqlite, Transaction};
 
 use crate::{
     AppResult,
@@ -14,13 +14,13 @@ impl Dao for SyncDataTaskDao {
 }
 
 impl SyncDataTaskDao {
-    pub async fn first(tx: &mut Transaction<'_, Sqlite>) -> AppResult<Option<SyncDataTask>> {
+    pub async fn first(tx: &mut DatabaseTransaction) -> AppResult<Option<SyncDataTask>> {
         let task = dao_first::<Self, _>(tx).await?;
         Ok(task)
     }
 
     pub async fn create(
-        tx: &mut Transaction<'_, Sqlite>,
+        tx: &mut DatabaseTransaction,
         req: CreateSyncDataTaskRequest,
     ) -> AppResult<i64> {
         let task: Option<SyncDataTask> = dao_first::<Self, _>(tx).await?;
@@ -33,7 +33,7 @@ impl SyncDataTaskDao {
     }
 
     pub async fn update_job(
-        tx: &mut Transaction<'_, Sqlite>,
+        tx: &mut DatabaseTransaction,
         id: i64,
         job_id: String,
     ) -> AppResult<u64> {

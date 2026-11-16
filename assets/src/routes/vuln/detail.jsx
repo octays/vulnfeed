@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { getVulnerabilityDetail } from '../../lib/api'
+import TriggerReceiptButton from '../../components/TriggerReceiptButton'
 
 const VulnerabilityDetailPage = () => {
   const { id } = useParams()
@@ -68,9 +69,12 @@ const VulnerabilityDetailPage = () => {
       ) : vulnerability ? (
         <div className="overflow-hidden bg-white shadow sm:rounded-lg">
           <div className="px-4 py-5 border-b border-gray-200 sm:px-6">
-            <h1 className="text-2xl font-medium leading-6 text-gray-900">
-              {vulnerability.title}
-            </h1>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <h1 className="text-2xl font-medium leading-6 text-gray-900">
+                {vulnerability.title}
+              </h1>
+              <TriggerReceiptButton sourceType="vuln" sourceId={vulnerability.id} />
+            </div>
             <div className="flex items-center mt-2">
               <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                 vulnerability.severity === 'Critical' ? 'bg-red-100 text-red-800' :

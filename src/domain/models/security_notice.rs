@@ -7,7 +7,17 @@ use serde::{Deserialize, Serialize};
 use crate::domain::models::page_utils::PageFilter;
 
 #[derive(
-    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, sqlx::FromRow, Deserialize,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    sqlx::FromRow,
+    sea_orm::FromQueryResult,
+    Deserialize,
 )]
 pub struct SecuritNotice {
     pub id: i64,
@@ -21,6 +31,8 @@ pub struct SecuritNotice {
     pub publish_time: String,
     pub detail_link: String,
     pub pushed: bool,
+    /// Classified tech stacks (comma-separated slugs); empty = unclassified.
+    pub stacks: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

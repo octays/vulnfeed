@@ -2,9 +2,21 @@ services:
   vulnfeed:
     image: 1228022817/vulnfeed:latest
     restart: always
+    environment:
+      VULNFEED_FEISHU_BRIDGE_TOKEN: ${VULNFEED_FEISHU_BRIDGE_TOKEN:-}
     volumes:
       - "./data/:/app/data/"
     privileged: true
     command: ["server", "--config-file", "config.toml"]
     ports:
       - "9000:9000"
+  feishu-bridge:
+    profiles: ["feishu"]
+    build: ./integrations/feishu-probe
+    restart: always
+    depends_on:
+      - vulnfeed
+    network_mode: "service:vulnfeed"
+    environment:
+      VULNFEED_FEISHU_BRIDGE_URL: http://127.0.0.1:9000/api/internal/feishu/card-action
+      VULNFEED_FEISHU_BRIDGE_TOKEN: ${VULNFEED_FEISHU_BRIDGE_TOKEN:-}

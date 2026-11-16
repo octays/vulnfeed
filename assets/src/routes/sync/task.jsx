@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { getSyncDataTask, createOrUpdateSyncDataTask, runSyncDataTaskNow } from '../../lib/api'
+import api, { getSyncDataTask, createOrUpdateSyncDataTask, runSyncDataTaskNow } from '../../lib/api'
+import FeishuDirectory from '../feishu-directory'
 
 const SyncDataTaskPage = () => {
   const [task, setTask] = useState({
@@ -7,6 +8,11 @@ const SyncDataTaskPage = () => {
     interval_minutes: 60,
     status: true,
     skip_tls_verify: false,
+    push_history: false,
+    auto_receipts: false,
+    auto_remind: false,
+    allow_response_deletion: false,
+    remind_escalate_open_id: '',
   })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -31,6 +37,11 @@ const SyncDataTaskPage = () => {
           interval_minutes: data.interval_minutes,
           status: data.status,
           skip_tls_verify: data.skip_tls_verify,
+          push_history: data.push_history,
+          auto_receipts: data.auto_receipts,
+          auto_remind: !!data.auto_remind,
+          allow_response_deletion: !!data.allow_response_deletion,
+          remind_escalate_open_id: data.remind_escalate_open_id || '',
         })
       }
     } catch (err) {
@@ -84,7 +95,8 @@ const SyncDataTaskPage = () => {
     }
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div>
+      <div className="max-w-3xl mx-auto">
       <div className="mb-8 text-center">
         <h1 className="mb-2 text-3xl font-extrabold text-gray-900">
           数据同步任务配置
@@ -172,6 +184,44 @@ const SyncDataTaskPage = () => {
 
               <div className="sm:col-span-4">
                 <div className="flex items-start">
+                  <div className="flex items-center h-5"><input id="auto_receipts" name="auto_receipts" type="checkbox" checked={task.auto_receipts} onChange={handleChange} className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" /></div>
+                  <div className="ml-3 text-sm"><label htmlFor="auto_receipts" className="font-medium text-gray-700">自动发起影响确认</label><p className="text-gray-500">新入库且披露日期在 48 小时内（昨天及以后）的同步数据自动创建确认单并发送飞书卡片。历史或日期无法识别的数据不会自动发起。</p></div>
+                </div>
+              </div>
+
+              <div className="sm:col-span-4">
+                <div className="flex items-start">
+                  <div className="flex items-center h-5"><input id="auto_remind" name="auto_remind" type="checkbox" checked={task.auto_remind} onChange={handleChange} className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" /></div>
+                  <div className="ml-3 text-sm"><label htmlFor="auto_remind" className="font-medium text-gray-700">自动催办未回执维度</label><p className="text-gray-500">确认单仍有维度未回执时，每 24 小时自动催办一次并 @ 该维度负责人，次数不设上限；第 3 次起追加 @ 下方升级提醒人。</p></div>
+                </div>
+              </div>
+
+              <div className="sm:col-span-4">
+                <label htmlFor="remind_escalate_open_id" className="block text-sm font-medium text-gray-700">催办升级提醒人 Open ID</label>
+                <input id="remind_escalate_open_id" name="remind_escalate_open_id" type="text" value={task.remind_escalate_open_id} onChange={handleChange} className="mt-1 px-3 py-2 border rounded w-full" placeholder="ou_…（第 3 次催办起追加 @，留空不升级）" />
+              </div>
+
+              <div className="sm:col-span-4">
+                <div className="flex items-start">
+                  <div className="flex items-center h-5"><input id="allow_response_deletion" name="allow_response_deletion" type="checkbox" checked={task.allow_response_deletion} onChange={handleChange} className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" /></div>
+                  <div className="ml-3 text-sm"><label htmlFor="allow_response_deletion" className="font-medium text-gray-700">允许填写人删除自己的回执</label><p className="text-gray-500">开启后确认卡片上显示「删除我的回执」按钮，填写人可撤回自己的提交（软删除并保留审计）；关闭则只能通过再次提交覆盖变更。对所有确认单统一生效。</p></div>
+                </div>
+              </div>
+
+              <div className="sm:col-span-4">
+                <div className="flex items-start">
+                  <div className="flex items-center h-5">
+                    <input id="push_history" name="push_history" type="checkbox" checked={task.push_history} onChange={handleChange} className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" />
+                  </div>
+                  <div className="ml-3 text-sm">
+                    <label htmlFor="push_history" className="font-medium text-gray-700">允许自动推送历史数据</label>
+                    <p className="text-gray-500">关闭时只推送发布日期为今天或以后的数据，日期无法识别的数据不会自动推送。开启后允许推送同步时遇到的历史数据。</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="sm:col-span-4">
+                <div className="flex items-start">
                   <div className="flex items-center h-5">
                     <input id="skip_tls_verify" name="skip_tls_verify" type="checkbox" checked={task.skip_tls_verify} onChange={handleChange} className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" />
                   </div>
@@ -220,6 +270,15 @@ const SyncDataTaskPage = () => {
           </form>
         </div>
       )}
+      </div>
+
+      <div className="w-[80%] mx-auto my-8">
+        <div className="p-5 bg-white rounded shadow">
+          <h3 className="text-lg font-medium mb-3">影响确认接收设置</h3>
+          <p className="mb-4 text-sm text-gray-500">确认卡片发送到下方启用的接收群；填写人的团队与姓名由飞书部门/通讯录自动解析。</p>
+          <FeishuDirectory />
+        </div>
+      </div>
     </div>
   )
 }

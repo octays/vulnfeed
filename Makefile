@@ -54,3 +54,8 @@ zig-build: ## 本地 cargo-zigbuild 交叉编译(当前 ZIGTRIPLE)
 	$(ZIG_REQ)
 	@rustup target list --installed | grep -q "^$(ZIGTRIPLE)$$" || rustup target add $(ZIGTRIPLE)
 	cargo zigbuild --release --target $(ZIGTRIPLE)
+
+.PHONY: feishu-bridge
+feishu-bridge: ## 构建本机飞书桥接；服务启动后自动管理长连接
+	@mkdir -p target
+	cd integrations/feishu-probe && go build -o ../../target/feishu-bridge .

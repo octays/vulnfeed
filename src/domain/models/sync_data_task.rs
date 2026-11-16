@@ -4,13 +4,29 @@ use nutype::nutype;
 use sea_query::Value;
 use serde::Serialize;
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, sqlx::FromRow)]
+#[derive(
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    sqlx::FromRow,
+    sea_orm::FromQueryResult,
+)]
 pub struct SyncDataTask {
     pub id: i64,
     pub name: String,
     pub interval_minutes: i32,
     pub status: bool,
     pub skip_tls_verify: bool,
+    pub push_history: bool,
+    pub auto_receipts: bool,
+    pub auto_remind: bool,
+    pub allow_response_deletion: bool,
+    pub remind_escalate_open_id: String,
     pub job_id: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -22,6 +38,11 @@ pub struct CreateSyncDataTaskRequest {
     pub interval_minutes: SyncDataTaskIntervalMinutes,
     pub status: bool,
     pub skip_tls_verify: bool,
+    pub push_history: bool,
+    pub auto_receipts: bool,
+    pub auto_remind: bool,
+    pub allow_response_deletion: bool,
+    pub remind_escalate_open_id: String,
     pub job_id: Option<String>,
 }
 
@@ -36,6 +57,11 @@ impl CreateSyncDataTaskRequest {
             interval_minutes,
             status,
             skip_tls_verify: false,
+            push_history: false,
+            auto_receipts: false,
+            auto_remind: false,
+            allow_response_deletion: false,
+            remind_escalate_open_id: String::new(),
             job_id: None,
         }
     }

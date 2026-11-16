@@ -7,7 +7,17 @@ use serde::{Deserialize, Serialize};
 use crate::domain::models::{page_utils::PageFilter, sql_json_vec::SqlJsonVecString};
 
 #[derive(
-    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, sqlx::FromRow, Deserialize,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    sqlx::FromRow,
+    sea_orm::FromQueryResult,
+    Deserialize,
 )]
 pub struct VulnInformation {
     pub id: i64,
@@ -26,6 +36,8 @@ pub struct VulnInformation {
     pub reasons: SqlJsonVecString,
     pub pushed: bool,
     pub detail_link: String,
+    /// Classified tech stacks (comma-separated slugs); empty = unclassified.
+    pub stacks: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

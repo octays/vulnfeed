@@ -1,22 +1,33 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { getSecNotices, getNoticeSources, pushSecNotice } from '../../lib/api'
+import TriggerReceiptButton from '../../components/TriggerReceiptButton'
+import ReceiptBadge from '../../components/ReceiptBadge'
+import ReceiptCaseModal from '../../components/ReceiptCaseModal'
+import { getSecNotices, getNoticeSources } from '../../lib/api'
 
 const SecNoticeListPage = () => {
   const [secNotices, setSecNotices] = useState([])
+  const [receiptCase, setReceiptCase] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [pageNo, setPageNo] = useState(1)
   const [pageSize] = useState(10)
   const [totalCount, setTotalCount] = useState(0)
   const [sources, setSources] = useState([])
-    const [pushingId, setPushingId] = useState(null)
   // 新的筛选条件状态
   const [filters, setFilters] = useState({
     title: '',
-    pushed: '',
     source_name: ''  // 存储来源的name字段
   })
+
+  const fetchSources = async () => {
+    try {
+      const response = await getNoticeSources()
+      setSources(response.data.data)
+    } catch (err) {
+      console.error('获取公告来源失败:', err)
+    }
+  }
 
   useEffect(() => {
     fetchSources()
@@ -26,29 +37,9 @@ const SecNoticeListPage = () => {
     fetchSecNotices()
   }, [pageNo, filters])
 
-  const handlePushNotice = async (notice) => {
-        setPushingId(notice.id)
-        try {
-            await pushSecNotice(notice.id)
-        } catch (err) {
-            setError(err.response?.data?.data?.message || '推送失败')
-            console.error('Push error:', err)
-        } finally {
-            setPushingId(null)
-        }
-    }
 
-const fetchSources = async () => {
-    try {
-      const response = await getNoticeSources()
-      setSources(response.data.data)
-    } catch (err) {
-      console.error('获取公告来源列表失败:', err)
-    }
-  }
-
-  const fetchSecNotices = async () => {
-    setLoading(true)
+  const fetchSecNotices = async (silent = false) => {
+    if (!silent) setLoading(true)
     setError('')
 
     try {
@@ -72,7 +63,7 @@ const fetchSources = async () => {
       setError('获取安全公告列表失败')
       console.error('Fetch sec notices error:', err)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -103,8 +94,7 @@ const fetchSources = async () => {
   const handleResetFilters = () => {
     setFilters({
       title: '',
-      pushed: '',
-      source_name: ''
+        source_name: ''
     })
     // 重置页码到第一页
     setPageNo(1)
@@ -141,21 +131,6 @@ const fetchSources = async () => {
             />
           </div>
           <div>
-            <label htmlFor="pushed" className="block text-sm font-medium text-gray-700">
-              推送状态
-            </label>
-            <select
-              name="pushed"
-              id="pushed"
-              value={filters.pushed}
-              onChange={handleFilterChange}
-              className="block w-full px-3 py-2 placeholder-gray-400 border border-gray-300 rounded-md shadow-sm appearance-none focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-            >
-              <option value="">全部</option>
-              <option value="true">已推送</option>
-              <option value="false">未推送</option>
-            </select>
-          </div>
           <div>
             <label htmlFor="source" className="block text-sm font-medium text-gray-700">
               来源
@@ -175,6 +150,7 @@ const fetchSources = async () => {
               ))}
             </select>
           </div>
+        </div>
         </div>
         <div className="flex justify-end mt-4">
           <button
@@ -235,19 +211,10 @@ const fetchSources = async () => {
                           <p>
                             发布时间: <time dateTime={notice.publish_time}>{notice.publish_time}</time>
                           </p>
-                          <span className={`ml-4 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            notice.pushed ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                          }`}>
-                            {notice.pushed ? '已推送' : '未推送'}
-                          </span>
-                          <button
-                              type="button"
-                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handlePushNotice(notice) }}
-                              disabled={pushingId === notice.id}
-                              className="ml-2 inline-flex items-center px-2.5 py-0.5 border border-indigo-300 rounded-full text-xs font-medium text-indigo-700 bg-white hover:bg-indigo-50 disabled:opacity-50"
-                          >
-                              {pushingId === notice.id ? '推送中' : '推送'}
-                          </button>
+                          <ReceiptBadge receipt={notice.receipt} />
+                          {(notice.stacks || '').split(',').filter(Boolean).map(slug => <span key={slug} className="ml-1 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700">{slug}</span>)}
+                          <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (notice.receipt) setReceiptCase(notice.receipt.case_id); else window.alert('该安全公告尚未发起影响确认。') }} className="ml-2 inline-flex items-center px-2.5 py-0.5 border border-emerald-300 rounded-full text-xs font-medium text-emerald-700 bg-white hover:bg-emerald-50">查看确认</button>
+                          <TriggerReceiptButton sourceType="notice" sourceId={notice.id} onComplete={() => fetchSecNotices(true)} />
                         </div>
                       </div>
                       <div className="mt-2">
@@ -298,6 +265,7 @@ const fetchSources = async () => {
           </div>
         </>
       )}
+    {receiptCase && <ReceiptCaseModal caseId={receiptCase} onClose={() => setReceiptCase(null)} onChanged={fetchSecNotices} />}
     </div>
   )
 }

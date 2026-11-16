@@ -110,6 +110,46 @@ pub struct Config {
     #[serde(default)]
     pub push: PushConfig,
     pub telemetry: TelemetryConfig,
+    #[serde(default)]
+    pub llm: LlmConfig,
+}
+
+/// OpenAI-compatible LLM for tech-stack classification. Works with
+/// DeepSeek/Qwen/GLM/Ollama; disabled by default so nothing changes until
+/// base_url+api_key+model are provided.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LlmConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub base_url: String,
+    #[serde(default)]
+    pub api_key: String,
+    #[serde(default = "default_llm_model")]
+    pub model: String,
+    #[serde(default = "default_llm_timeout")]
+    pub timeout_secs: u64,
+}
+
+impl Default for LlmConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            base_url: String::new(),
+            api_key: String::new(),
+            model: default_llm_model(),
+            timeout_secs: default_llm_timeout(),
+        }
+    }
+}
+
+fn default_llm_model() -> String {
+    "deepseek-chat".to_string()
+}
+
+fn default_llm_timeout() -> u64 {
+    20
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -232,6 +272,7 @@ impl Default for Config {
                 },
             },
             push: PushConfig::default(),
+            llm: LlmConfig::default(),
         }
     }
 }
@@ -269,6 +310,31 @@ pub const fn known_option_entries() -> &'static [OptionEntry] {
             env_name: "VULNFEED_CONFIG_DATABASE_PATH",
             ent_path: "database.path",
             ent_type: "string",
+        },
+        OptionEntry {
+            env_name: "VULNFEED_CONFIG_LLM_ENABLED",
+            ent_path: "llm.enabled",
+            ent_type: "boolean",
+        },
+        OptionEntry {
+            env_name: "VULNFEED_CONFIG_LLM_BASE_URL",
+            ent_path: "llm.base_url",
+            ent_type: "string",
+        },
+        OptionEntry {
+            env_name: "VULNFEED_CONFIG_LLM_API_KEY",
+            ent_path: "llm.api_key",
+            ent_type: "string",
+        },
+        OptionEntry {
+            env_name: "VULNFEED_CONFIG_LLM_MODEL",
+            ent_path: "llm.model",
+            ent_type: "string",
+        },
+        OptionEntry {
+            env_name: "VULNFEED_CONFIG_LLM_TIMEOUT_SECS",
+            ent_path: "llm.timeout_secs",
+            ent_type: "integer",
         },
     ]
 }

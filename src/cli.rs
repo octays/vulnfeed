@@ -1,3 +1,4 @@
+use sea_orm::TransactionTrait;
 use std::{path::PathBuf, sync::Arc};
 
 use crate::{
@@ -35,6 +36,7 @@ use error_stack::ResultExt;
 #[derive(Clone)]
 pub struct Ctx<S: VulnService + Send + Sync + 'static> {
     pub vuln_service: Arc<S>,
+    pub db: Db,
     pub config: Arc<Config>,
     pub sched: Arc<Scheduler>,
     pub jwt: Arc<JWT>,
@@ -82,10 +84,7 @@ async fn run_server(server_rt: &Runtime, config: Config) -> AppResult<()> {
 
     let db = Db::new(&config).await.change_context_lazy(make_error)?;
 
-    sqlx::migrate!("./migrations")
-        .run(&db.pool)
-        .await
-        .change_context_lazy(make_error)?;
+    db.migrate().await.change_context_lazy(make_error)?;
 
     seed_default_admin(&db)
         .await
@@ -110,24 +109,56 @@ async fn run_server(server_rt: &Runtime, config: Config) -> AppResult<()> {
         }
     });
 
+    server_rt.spawn(crate::output::receipt_refresh::run(db.orm()));
+    server_rt.spawn(crate::output::receipt_name_lookup::run(db.orm()));
+    server_rt.spawn(crate::output::receipt_auto_delivery::run(db.clone()));
+    server_rt.spawn(crate::output::receipt_remind::run(db.clone()));
+    let backfill_db = db.clone();
+    server_rt.spawn(async move {
+        crate::output::stacks::backfill(&backfill_db.orm()).await;
+    });
+    // Warm the department resolver so the first submission after restart is
+    // answered instantly instead of waiting for the full reverse scan.
+    {
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+        let warm_app = crate::output::db::entities::feishu_app::Entity::find()
+            .filter(crate::output::db::entities::feishu_app::Column::Enabled.eq(true))
+            .one(&db.orm())
+            .await
+            .ok()
+            .flatten()
+            .and_then(|app| {
+                crate::output::push::feishu_app::FeishuApp::new(app.app_id, app.app_secret).ok()
+            });
+        if let Some(client) = warm_app {
+            server_rt.spawn(async move {
+                crate::output::receipt_department_cache::warm_up(&client).await;
+            });
+        }
+    }
+
     let sched = Scheduler::try_new(db.clone())
         .await
         .change_context_lazy(make_error)?;
 
     let sched = sched.init_from_db().await.change_context_lazy(make_error)?;
-    let vuln_service = Service::new(db);
+    let vuln_service = Service::new(db.clone());
     let ctx = Ctx {
         vuln_service: Arc::new(vuln_service),
+        db,
         config: Arc::new(config),
         sched: Arc::new(sched),
         jwt: Arc::new(jwt),
     };
 
+    let bridge_config = ctx.config.clone();
     let server = http_server::start_server(ctx, server_rt, shutdown_rx, acceptor)
         .await
         .change_context_lazy(|| {
             Error::Message("A fatal error has occurred in server process.".to_string())
         })?;
+
+    let _bridge = crate::output::bridge_supervisor::start_local(&bridge_config);
 
     ctrlc::set_handler(move || shutdown_tx.shutdown()).change_context_lazy(|| {
         Error::Message("failed to setup ctrl-c signal handle".to_string())
@@ -190,11 +221,8 @@ async fn run_change_super_user_password(config: Config, password: String) -> App
     let password = AdminUserPassword::try_new(password).change_context_lazy(invalid_password)?;
     let password_hash = compute_password_hash(password.as_ref()).change_context_lazy(make_error)?;
     let db = Db::new(&config).await.change_context_lazy(make_error)?;
-    sqlx::migrate!("./migrations")
-        .run(&db.pool)
-        .await
-        .change_context_lazy(make_error)?;
-    let mut tx = db.pool.begin().await.change_context_lazy(make_error)?;
+    db.migrate().await.change_context_lazy(make_error)?;
+    let mut tx = db.orm().begin().await.change_context_lazy(make_error)?;
     let req = CreateAdminUserRequest::new(
         AdminUsername::try_new("admin").change_context_lazy(make_error)?,
         AdminUserPassword::try_new(password_hash).change_context_lazy(make_error)?,
@@ -207,7 +235,7 @@ async fn run_change_super_user_password(config: Config, password: String) -> App
 /// admin_user 表无 admin 记录时(首次启动)播种默认超管 admin/admin
 async fn seed_default_admin(db: &Db) -> AppResult<()> {
     let make_error = || Error::Message("failed to seed default admin user".to_string());
-    let mut tx = db.pool.begin().await.change_context_lazy(make_error)?;
+    let mut tx = db.orm().begin().await.change_context_lazy(make_error)?;
     let name = AdminUsername::try_new("admin").change_context_lazy(make_error)?;
     if AdminUserDao::fetch_by_name(&mut tx, &name).await?.is_none() {
         let password_hash = compute_password_hash("admin").change_context_lazy(make_error)?;

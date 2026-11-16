@@ -1,0 +1,1 @@
+-- Replaced by the multi-application model on fresh databases.

@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use poem::{
     handler,
     http::StatusCode,
-    web::{Data, Path, Query},
+    web::{Data, Query},
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -73,6 +73,9 @@ pub struct VulnInformationData {
     pub detail_link: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub stacks: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub receipt: Option<crate::input::http::handlers::receipts::ReceiptSummary>,
 }
 
 impl VulnInformationData {
@@ -96,6 +99,8 @@ impl VulnInformationData {
             detail_link: vuln.detail_link,
             created_at: vuln.created_at,
             updated_at: vuln.updated_at,
+            stacks: vuln.stacks,
+            receipt: None,
         }
     }
 }
@@ -147,12 +152,24 @@ pub async fn list_vuln_information<S: VulnService + Send + Sync + 'static>(
     Query(body): Query<ListVulnInformationRequestBody>,
 ) -> Result<ApiSuccess<ListVulnInformationHttpResponseData>, ApiError> {
     let req = body.try_into_domain()?;
-    state
+    let mut page: ListVulnInformationHttpResponseData = state
         .vuln_service
         .list_vulnfusion_information(req)
         .await
-        .map_err(ApiError::from)
-        .map(|data| ApiSuccess::new(StatusCode::OK, data.into()))
+        .map_err(ApiError::from)?
+        .into();
+    let ids: Vec<i64> = page.data.iter().map(|vuln| vuln.id).collect();
+    let summaries =
+        crate::input::http::handlers::receipts::receipt_summaries(&state.db.orm(), "vuln", &ids)
+            .await
+            .map_err(|e| {
+                log::error!("receipt summary failed: {e}");
+                ApiError::InternalServerError("receipt summary failed".into())
+            })?;
+    for vuln in page.data.iter_mut() {
+        vuln.receipt = summaries.get(&vuln.id).cloned();
+    }
+    Ok(ApiSuccess::new(StatusCode::OK, page))
 }
 
 #[handler]
@@ -171,26 +188,4 @@ pub async fn get_vuln_information_detail<S: VulnService + Send + Sync + 'static>
                 .ok_or(ApiError::BadRequest("Vulnerability not found".to_string()))
         })
         .map(|data| ApiSuccess::new(StatusCode::OK, data))
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct ManualPushHttpResponseData {
-    pub success: usize,
-    pub total: usize,
-}
-
-#[handler]
-pub async fn push_vuln_information<S: VulnService + Send + Sync + 'static>(
-    state: Data<&Ctx<S>>,
-    Path(id): Path<i64>,
-) -> Result<ApiSuccess<ManualPushHttpResponseData>, ApiError> {
-    let (success, total) = state
-        .vuln_service
-        .push_vuln_manually(id)
-        .await
-        .map_err(ApiError::from)?;
-    Ok(ApiSuccess::new(
-        StatusCode::OK,
-        ManualPushHttpResponseData { success, total },
-    ))
 }

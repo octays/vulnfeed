@@ -62,6 +62,18 @@ impl From<SqlJsonVecString> for sea_query::Value {
     }
 }
 
+impl sea_orm::TryGetable for SqlJsonVecString {
+    fn try_get_by<I: sea_orm::ColIdx>(
+        row: &sea_orm::QueryResult,
+        index: I,
+    ) -> Result<Self, sea_orm::TryGetError> {
+        let value = <Option<String> as sea_orm::TryGetable>::try_get_by(row, index)?;
+        serde_json::from_str(value.as_deref().unwrap_or("[]"))
+            .map(SqlJsonVecString)
+            .map_err(|e| sea_orm::DbErr::Type(format!("invalid JSON string list: {e}")).into())
+    }
+}
+
 impl sqlx::Type<sqlx::sqlite::Sqlite> for SqlJsonVecString {
     fn type_info() -> sqlx::sqlite::SqliteTypeInfo {
         <&str as sqlx::Type<sqlx::sqlite::Sqlite>>::type_info()

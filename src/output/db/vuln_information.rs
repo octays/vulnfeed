@@ -1,5 +1,5 @@
+use sea_orm::DatabaseTransaction;
 use sea_query::Value;
-use sqlx::{Sqlite, Transaction};
 
 use crate::{
     AppResult,
@@ -25,7 +25,7 @@ impl Dao for VulnInformationDao {
 
 impl VulnInformationDao {
     pub async fn update_pushed(
-        tx: &mut Transaction<'_, Sqlite>,
+        tx: &mut DatabaseTransaction,
         id: i64,
         status: bool,
     ) -> AppResult<u64> {
@@ -33,8 +33,26 @@ impl VulnInformationDao {
         Ok(row)
     }
 
+    /// Mark an item pushed right at ingest (webhook push channels removed;
+    /// the flag now only records that ingest processing completed).
+    pub async fn mark_pushed(db: &sea_orm::DatabaseConnection, id: i64) -> AppResult<()> {
+        use sea_orm::ConnectionTrait;
+        db.execute(sea_orm::Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Sqlite,
+            "UPDATE vuln_information SET pushed=1 WHERE id=?",
+            [id.into()],
+        ))
+        .await
+        .map_err(|e| {
+            error_stack::Report::new(crate::errors::Error::Message(format!(
+                "mark pushed failed: {e}"
+            )))
+        })?;
+        Ok(())
+    }
+
     pub async fn create(
-        tx: &mut Transaction<'_, Sqlite>,
+        tx: &mut DatabaseTransaction,
         req: CreateVulnInformation,
     ) -> AppResult<i64> {
         let id = dao_create::<Self, _>(tx, req).await?;
@@ -126,7 +144,7 @@ impl VulnInformationDao {
     }
 
     pub async fn create_or_update(
-        tx: &mut Transaction<'_, Sqlite>,
+        tx: &mut DatabaseTransaction,
         mut req: CreateVulnInformation,
     ) -> AppResult<(i64, bool)> {
         // 二级去重:key 未命中且同 CVE 已有记录时并入已有行,不新建、不触发推送
@@ -170,7 +188,7 @@ impl VulnInformationDao {
     }
 
     pub async fn filter_vulnfusion_information(
-        tx: &mut Transaction<'_, Sqlite>,
+        tx: &mut DatabaseTransaction,
         page_filter: &PageFilter,
         search_params: &SearchParams,
     ) -> AppResult<Vec<VulnInformation>> {
@@ -203,7 +221,7 @@ impl VulnInformationDao {
     }
 
     pub async fn filter_vulnfusion_information_count(
-        tx: &mut Transaction<'_, Sqlite>,
+        tx: &mut DatabaseTransaction,
         search_params: &SearchParams,
     ) -> AppResult<i64> {
         let mut query_builder = DaoQueryBuilder::<Self>::new();
@@ -228,14 +246,14 @@ impl VulnInformationDao {
     }
 
     pub async fn fetch_by_id(
-        tx: &mut Transaction<'_, Sqlite>,
+        tx: &mut DatabaseTransaction,
         id: i64,
     ) -> AppResult<Option<VulnInformation>> {
         dao_fetch_by_id::<Self, VulnInformation>(tx, id).await
     }
 
     pub async fn fetch_by_key(
-        tx: &mut Transaction<'_, Sqlite>,
+        tx: &mut DatabaseTransaction,
         key: &str,
     ) -> AppResult<Option<VulnInformation>> {
         dao_fetch_by_column::<Self, VulnInformation>(tx, "key", key).await
@@ -285,7 +303,10 @@ mod tests {
     #[tokio::test]
     async fn same_cve_from_two_sources_merges_into_one_row() {
         let pool = setup().await;
-        let mut tx = pool.begin().await.expect("begin tx");
+        let orm = sea_orm::SqlxSqliteConnector::from_sqlx_sqlite_pool(pool.clone());
+        let mut tx = sea_orm::TransactionTrait::begin(&orm)
+            .await
+            .expect("begin tx");
         let (id1, is_new1) = VulnInformationDao::create_or_update(
             &mut tx,
             make_req("k-avd", "CVE-2026-1111", "Medium", &["tagA"]),
@@ -315,7 +336,10 @@ mod tests {
     #[tokio::test]
     async fn same_key_resync_keeps_original_path() {
         let pool = setup().await;
-        let mut tx = pool.begin().await.expect("begin tx");
+        let orm = sea_orm::SqlxSqliteConnector::from_sqlx_sqlite_pool(pool.clone());
+        let mut tx = sea_orm::TransactionTrait::begin(&orm)
+            .await
+            .expect("begin tx");
         let r = make_req("k-x", "CVE-2026-2222", "High", &["t"]);
         let (id1, n1) = VulnInformationDao::create_or_update(&mut tx, r.clone())
             .await

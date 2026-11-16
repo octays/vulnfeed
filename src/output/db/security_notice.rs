@@ -1,5 +1,5 @@
+use sea_orm::DatabaseTransaction;
 use sea_query::Value;
-use sqlx::{Sqlite, Transaction};
 
 use crate::{
     AppResult,
@@ -19,30 +19,27 @@ impl Dao for SecurityNoticeDao {
 }
 
 impl SecurityNoticeDao {
-    pub async fn create(
-        tx: &mut Transaction<'_, Sqlite>,
-        req: CreateSecurityNotice,
-    ) -> AppResult<i64> {
+    pub async fn create(tx: &mut DatabaseTransaction, req: CreateSecurityNotice) -> AppResult<i64> {
         let id = dao_create::<Self, _>(tx, req).await?;
         Ok(id)
     }
 
     pub async fn fetch_by_key(
-        tx: &mut Transaction<'_, Sqlite>,
+        tx: &mut DatabaseTransaction,
         key: &str,
     ) -> AppResult<Option<SecuritNotice>> {
         dao_fetch_by_column::<Self, SecuritNotice>(tx, "key", key).await
     }
 
     pub async fn fetch_by_id(
-        tx: &mut Transaction<'_, Sqlite>,
+        tx: &mut DatabaseTransaction,
         id: i64,
     ) -> AppResult<Option<SecuritNotice>> {
         dao_fetch_by_id::<Self, SecuritNotice>(tx, id).await
     }
 
     pub async fn update_pushed(
-        tx: &mut Transaction<'_, Sqlite>,
+        tx: &mut DatabaseTransaction,
         id: i64,
         status: bool,
     ) -> AppResult<u64> {
@@ -50,8 +47,26 @@ impl SecurityNoticeDao {
         Ok(row)
     }
 
+    /// Mark an item pushed right at ingest (webhook push channels removed;
+    /// the flag now only records that ingest processing completed).
+    pub async fn mark_pushed(db: &sea_orm::DatabaseConnection, id: i64) -> AppResult<()> {
+        use sea_orm::ConnectionTrait;
+        db.execute(sea_orm::Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Sqlite,
+            "UPDATE security_notice SET pushed=1 WHERE id=?",
+            [id.into()],
+        ))
+        .await
+        .map_err(|e| {
+            error_stack::Report::new(crate::errors::Error::Message(format!(
+                "mark pushed failed: {e}"
+            )))
+        })?;
+        Ok(())
+    }
+
     pub async fn filter_security_notices(
-        tx: &mut Transaction<'_, Sqlite>,
+        tx: &mut DatabaseTransaction,
         page_filter: &PageFilter,
         search_params: &SearchParams,
     ) -> AppResult<Vec<SecuritNotice>> {
@@ -80,7 +95,7 @@ impl SecurityNoticeDao {
     }
 
     pub async fn filter_security_notices_count(
-        tx: &mut Transaction<'_, Sqlite>,
+        tx: &mut DatabaseTransaction,
         search_params: &SearchParams,
     ) -> AppResult<i64> {
         let mut query_builder = DaoQueryBuilder::<Self>::new();

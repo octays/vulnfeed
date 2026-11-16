@@ -48,7 +48,7 @@ impl SecNoticePlugin for WeaverNoticePlugin {
                 "EC10.0安全补丁" => "EC10.0",
                 _ => return Err(Error::Message("Invalid product name".to_string()).into()),
             };
-            let publish_time = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+            let publish_time = patch.update_time;
             let create_security_notice = CreateSecurityNotice {
                 key: patch.md5,
                 title: patch.title,

@@ -4,7 +4,18 @@ use nutype::nutype;
 use sea_query::Value;
 use serde::Serialize;
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, sqlx::FromRow)]
+#[derive(
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    sqlx::FromRow,
+    sea_orm::FromQueryResult,
+)]
 pub struct AdminUser {
     pub id: i64,
     pub name: String,

@@ -81,16 +81,6 @@ export const getPlugins = () => {
     return api.get('/plugins')
 }
 
-// 获取钉钉机器人配置
-export const getDingBotConfig = () => {
-    return api.get('/ding_bot_config')
-}
-
-// 创建或更新钉钉机器人配置
-export const createOrUpdateDingBotConfig = (data) => {
-    return api.post('/ding_bot_config', data)
-}
-
 // 获取安全公告列表
 export const getSecNotices = (params) => {
     return api.get('/sec_notice', {
@@ -119,22 +109,11 @@ export default api
 // 立即触发一轮全量同步
 export const runSyncDataTaskNow = () => api.post('/sync_data_task/run')
 
-// 推送渠道管理
-export const listPushChannels = () => api.get('/push_channels')
 
-export const createPushChannel = (channel) => api.post('/push_channels', channel)
-
-export const updatePushChannel = (id, channel) => api.put(`/push_channels/${id}`, channel)
-
-export const deletePushChannel = (id) => api.delete(`/push_channels/${id}`)
-
-export const testPushChannel = (id) => api.post(`/push_channels/${id}/test`)
 
 // 修改管理员密码
 export const changePassword = (oldPassword, newPassword) =>
     api.post('/account/password', { old_password: oldPassword, new_password: newPassword })
 
-// 手动推送单条漏洞/公告到所有启用渠道
-export const pushVuln = (id) => api.post(`/vulns/${id}/push`)
-
-export const pushSecNotice = (id) => api.post(`/sec_notice/${id}/push`)
+// 手动发起漏洞或公告影响确认
+export const triggerReceipt = (sourceType, sourceId) => api.post('/receipts/trigger', { source_type: sourceType, source_id: sourceId })

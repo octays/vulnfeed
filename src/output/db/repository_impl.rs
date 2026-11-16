@@ -1,4 +1,5 @@
 use error_stack::ResultExt;
+use sea_orm::TransactionTrait;
 
 use crate::{
     AppResult,
@@ -6,8 +7,6 @@ use crate::{
         models::{
             admin_user::{AdminUser, AdminUserPassword, AdminUsername, CreateAdminUserRequest},
             auth::LoginRequest,
-            ding_bot::{CreateDingBotRequest, DingBotConfig},
-            push_channel::{CreatePushChannelRequest, PushChannel},
             security_notice::{ListSecNoticeRequest, ListSecNoticeResponseData},
             sync_data_task::{CreateSyncDataTaskRequest, SyncDataTask},
             vuln_information::{
@@ -19,9 +18,8 @@ use crate::{
     },
     errors::Error,
     output::db::{
-        admin_user::AdminUserDao, ding_bot_config::DingBotConfigDao, push_channel::PushChannelDao,
-        security_notice::SecurityNoticeDao, sqlite::Db, sync_data_task::SyncDataTaskDao,
-        vuln_information::VulnInformationDao,
+        admin_user::AdminUserDao, security_notice::SecurityNoticeDao, sqlite::Db,
+        sync_data_task::SyncDataTaskDao, vuln_information::VulnInformationDao,
     },
     utils::password_hash::verify_password_hash,
 };
@@ -29,7 +27,7 @@ use crate::{
 impl VulnRepository for Db {
     async fn login(&self, req: &LoginRequest) -> AppResult<AdminUser> {
         let mut tx =
-            self.pool.begin().await.change_context_lazy(|| {
+            self.orm().begin().await.change_context_lazy(|| {
                 Error::Message("failed to begin transaction".to_string())
             })?;
         let admin = AdminUserDao::fetch_by_name(&mut tx, &req.username).await?;
@@ -46,7 +44,7 @@ impl VulnRepository for Db {
 
     async fn create_sync_data_task(&self, req: CreateSyncDataTaskRequest) -> AppResult<i64> {
         let mut tx =
-            self.pool.begin().await.change_context_lazy(|| {
+            self.orm().begin().await.change_context_lazy(|| {
                 Error::Message("failed to begin transaction".to_string())
             })?;
         let sync_data_task_id = SyncDataTaskDao::create(&mut tx, req).await?;
@@ -58,7 +56,7 @@ impl VulnRepository for Db {
 
     async fn get_sync_data_task(&self) -> AppResult<Option<SyncDataTask>> {
         let mut tx =
-            self.pool.begin().await.change_context_lazy(|| {
+            self.orm().begin().await.change_context_lazy(|| {
                 Error::Message("failed to begin transaction".to_string())
             })?;
         let sync_data_task = SyncDataTaskDao::first(&mut tx).await?;
@@ -73,7 +71,7 @@ impl VulnRepository for Db {
         req: ListVulnInformationRequest,
     ) -> AppResult<ListVulnInformationResponseData> {
         let mut tx =
-            self.pool.begin().await.change_context_lazy(|| {
+            self.orm().begin().await.change_context_lazy(|| {
                 Error::Message("failed to begin transaction".to_string())
             })?;
         let data = VulnInformationDao::filter_vulnfusion_information(
@@ -97,7 +95,7 @@ impl VulnRepository for Db {
         req: GetVulnInformationRequest,
     ) -> AppResult<Option<VulnInformation>> {
         let mut tx =
-            self.pool.begin().await.change_context_lazy(|| {
+            self.orm().begin().await.change_context_lazy(|| {
                 Error::Message("failed to begin transaction".to_string())
             })?;
         let vuln_information = VulnInformationDao::fetch_by_id(&mut tx, req.id).await?;
@@ -107,73 +105,13 @@ impl VulnRepository for Db {
         Ok(vuln_information)
     }
 
-    async fn create_ding_bot_config(&self, req: CreateDingBotRequest) -> AppResult<i64> {
-        let mut tx =
-            self.pool.begin().await.change_context_lazy(|| {
-                Error::Message("failed to begin transaction".to_string())
-            })?;
-        let id = DingBotConfigDao::create(&mut tx, req).await?;
-        tx.commit()
-            .await
-            .change_context_lazy(|| Error::Message("failed to commit transaction".to_string()))?;
-        Ok(id)
-    }
-
-    async fn list_push_channels(&self) -> AppResult<Vec<PushChannel>> {
-        let mut tx =
-            self.pool.begin().await.change_context_lazy(|| {
-                Error::Message("failed to begin transaction".to_string())
-            })?;
-        let ret = PushChannelDao::list_all(&mut tx).await?;
-        tx.commit()
-            .await
-            .change_context_lazy(|| Error::Message("failed to commit transaction".to_string()))?;
-        Ok(ret)
-    }
-
-    async fn create_push_channel(&self, req: CreatePushChannelRequest) -> AppResult<i64> {
-        let mut tx =
-            self.pool.begin().await.change_context_lazy(|| {
-                Error::Message("failed to begin transaction".to_string())
-            })?;
-        let id = PushChannelDao::create(&mut tx, req).await?;
-        tx.commit()
-            .await
-            .change_context_lazy(|| Error::Message("failed to commit transaction".to_string()))?;
-        Ok(id)
-    }
-
-    async fn update_push_channel(&self, id: i64, req: CreatePushChannelRequest) -> AppResult<()> {
-        let mut tx =
-            self.pool.begin().await.change_context_lazy(|| {
-                Error::Message("failed to begin transaction".to_string())
-            })?;
-        PushChannelDao::update(&mut tx, id, req).await?;
-        tx.commit()
-            .await
-            .change_context_lazy(|| Error::Message("failed to commit transaction".to_string()))?;
-        Ok(())
-    }
-
-    async fn delete_push_channel(&self, id: i64) -> AppResult<()> {
-        let mut tx =
-            self.pool.begin().await.change_context_lazy(|| {
-                Error::Message("failed to begin transaction".to_string())
-            })?;
-        PushChannelDao::delete(&mut tx, id).await?;
-        tx.commit()
-            .await
-            .change_context_lazy(|| Error::Message("failed to commit transaction".to_string()))?;
-        Ok(())
-    }
-
     async fn change_admin_password(
         &self,
         old_password: AdminUserPassword,
         new_password: AdminUserPassword,
     ) -> AppResult<()> {
         let make_error = || Error::Message("failed to change admin password".to_string());
-        let mut tx = self.pool.begin().await.change_context_lazy(make_error)?;
+        let mut tx = self.orm().begin().await.change_context_lazy(make_error)?;
         let name = AdminUsername::try_new("admin").change_context_lazy(make_error)?;
         let Some(user) = AdminUserDao::fetch_by_name(&mut tx, &name).await? else {
             return Err(Error::Message("admin user not found".to_string()).into());
@@ -193,61 +131,12 @@ impl VulnRepository for Db {
         Ok(())
     }
 
-    async fn push_vuln_manually(&self, id: i64) -> AppResult<(usize, usize)> {
-        let make_error = || Error::Message("failed to push vuln manually".to_string());
-        let mut tx = self.pool.begin().await.change_context_lazy(make_error)?;
-        let channels = PushChannelDao::list_enabled(&mut tx).await?;
-        if channels.is_empty() {
-            return Err(Error::BadRequest("无启用的推送渠道".to_string()).into());
-        }
-        let vuln = VulnInformationDao::fetch_by_id(&mut tx, id).await?;
-        tx.commit().await.change_context_lazy(make_error)?;
-        let Some(v) = vuln else {
-            return Err(Error::BadRequest("漏洞不存在".to_string()).into());
-        };
-        let title = v.title.clone();
-        let msg = crate::output::push::render_vulninfo(v)
-            .map_err(|e| Error::Message(format!("render vuln info failed: {e:?}")))?;
-        let ok = crate::output::push::push_markdown_all(&channels, title, msg).await?;
-        Ok((ok, channels.len()))
-    }
-
-    async fn push_sec_notice_manually(&self, id: i64) -> AppResult<(usize, usize)> {
-        let make_error = || Error::Message("failed to push sec notice manually".to_string());
-        let mut tx = self.pool.begin().await.change_context_lazy(make_error)?;
-        let channels = PushChannelDao::list_enabled(&mut tx).await?;
-        if channels.is_empty() {
-            return Err(Error::BadRequest("无启用的推送渠道".to_string()).into());
-        }
-        let sec_notice = SecurityNoticeDao::fetch_by_id(&mut tx, id).await?;
-        tx.commit().await.change_context_lazy(make_error)?;
-        let Some(n) = sec_notice else {
-            return Err(Error::BadRequest("安全公告不存在".to_string()).into());
-        };
-        let title = n.title.clone();
-        let msg = crate::output::push::render_sec_notice(n)
-            .map_err(|e| Error::Message(format!("render sec notice failed: {e:?}")))?;
-        let ok = crate::output::push::push_markdown_all(&channels, title, msg).await?;
-        Ok((ok, channels.len()))
-    }
-
-    async fn get_ding_bot_config(&self) -> AppResult<Option<DingBotConfig>> {
-        let mut tx =
-            self.pool.begin().await.change_context_lazy(|| {
-                Error::Message("failed to begin transaction".to_string())
-            })?;
-        let ding_bot_config = DingBotConfigDao::first(&mut tx).await?;
-        tx.commit()
-            .await
-            .change_context_lazy(|| Error::Message("failed to commit transaction".to_string()))?;
-        Ok(ding_bot_config)
-    }
     async fn list_sec_notice(
         &self,
         req: ListSecNoticeRequest,
     ) -> AppResult<ListSecNoticeResponseData> {
         let mut tx =
-            self.pool.begin().await.change_context_lazy(|| {
+            self.orm().begin().await.change_context_lazy(|| {
                 Error::Message("failed to begin transaction".to_string())
             })?;
         let data = SecurityNoticeDao::filter_security_notices(

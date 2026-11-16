@@ -1,4 +1,4 @@
-use sqlx::{Sqlite, Transaction};
+use sea_orm::DatabaseTransaction;
 
 use crate::{
     AppResult,
@@ -14,14 +14,14 @@ impl Dao for AdminUserDao {
 
 impl AdminUserDao {
     pub async fn create_super_user(
-        tx: &mut Transaction<'_, Sqlite>,
+        tx: &mut DatabaseTransaction,
         req: CreateAdminUserRequest,
     ) -> AppResult<i64> {
         dao_upsert::<Self, _>(tx, req, "name", &["password"]).await
     }
 
     pub async fn fetch_by_name(
-        tx: &mut Transaction<'_, Sqlite>,
+        tx: &mut DatabaseTransaction,
         name: &AdminUsername,
     ) -> AppResult<Option<AdminUser>> {
         dao_fetch_by_column::<Self, AdminUser>(tx, "name", name.as_ref()).await

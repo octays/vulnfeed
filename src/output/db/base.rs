@@ -1,13 +1,15 @@
+use crate::{AppResult, errors::Error};
 use error_stack::ResultExt;
 use modql::{SIden, field::HasSeaFields};
+use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseTransaction, FromQueryResult, Statement};
 use sea_query::{
     Alias, Asterisk, Condition, Expr, Iden, IntoIden, OnConflict, Query, SelectStatement,
-    SqliteQueryBuilder, TableRef,
+    SqliteQueryBuilder, TableRef, Values,
 };
-use sea_query_binder::SqlxBinder;
-use sqlx::{FromRow, Row, Sqlite, Transaction};
 
-use crate::{AppResult, errors::Error};
+fn stmt(sql: String, values: Values) -> Statement {
+    Statement::from_sql_and_values(DatabaseBackend::Sqlite, sql, values.0)
+}
 
 pub trait Dao {
     const TABLE: &'static str;
@@ -21,50 +23,45 @@ pub enum CommonIden {
     Id,
 }
 
-pub async fn dao_create<D, E>(tx: &mut Transaction<'_, Sqlite>, req: E) -> AppResult<i64>
+pub async fn dao_create<D, E>(tx: &mut DatabaseTransaction, req: E) -> AppResult<i64>
 where
     E: HasSeaFields,
     D: Dao,
 {
-    let fields = req.not_none_sea_fields();
-    let (columns, sea_values) = fields.for_sea_insert();
-    let mut query = Query::insert();
-    query
-        .into_table(D::table_ref())
+    let (columns, values) = req.not_none_sea_fields().for_sea_insert();
+    let mut q = Query::insert();
+    q.into_table(D::table_ref())
         .columns(columns)
-        .values(sea_values)
-        .change_context_lazy(|| Error::Message("failed to create record".to_string()))?
+        .values(values)
+        .change_context_lazy(|| Error::Message("failed to create record".into()))?
         .returning(Query::returning().columns([CommonIden::Id]));
-    let (sql, values) = query.build_sqlx(SqliteQueryBuilder);
-    log::debug!("sql: {} values: {:?}", sql, values);
-    let sqlx_query = sqlx::query_as_with::<_, (i64,), _>(&sql, values);
-    let (id,) = sqlx_query
-        .fetch_one(tx.as_mut())
+    let (sql, values) = q.build(SqliteQueryBuilder);
+    let row = tx
+        .query_one(stmt(sql, values))
         .await
-        .change_context_lazy(|| Error::Message("failed to create record".to_string()))?;
-    Ok(id)
+        .change_context_lazy(|| Error::Message("failed to create record".into()))?
+        .ok_or_else(|| Error::Message("missing created record".into()))?;
+    row.try_get("", "id")
+        .change_context_lazy(|| Error::Message("failed to read created id".into()))
 }
 
-pub async fn dao_first<D, T>(tx: &mut Transaction<'_, Sqlite>) -> AppResult<Option<T>>
+pub async fn dao_first<D, T>(tx: &mut DatabaseTransaction) -> AppResult<Option<T>>
 where
     D: Dao,
-    T: for<'r> FromRow<'r, sqlx::sqlite::SqliteRow> + Unpin + Send,
+    T: FromQueryResult + Send + Sync,
 {
     let (sql, values) = Query::select()
         .from(D::table_ref())
         .column(Asterisk)
-        .build_sqlx(SqliteQueryBuilder);
-
-    log::debug!("sql: {} values: {:?}", sql, values);
-    let ret = sqlx::query_as_with::<_, T, _>(&sql, values)
-        .fetch_optional(tx.as_mut())
+        .build(SqliteQueryBuilder);
+    T::find_by_statement(stmt(sql, values))
+        .one(&*tx)
         .await
-        .change_context_lazy(|| Error::Message("failed to fetch one record".to_string()))?;
-    Ok(ret)
+        .change_context_lazy(|| Error::Message("failed to fetch one record".into()))
 }
 
 pub async fn dao_upsert<D, E>(
-    tx: &mut Transaction<'_, Sqlite>,
+    tx: &mut DatabaseTransaction,
     req: E,
     conflict_column: &str,
     update_columns: &[&str],
@@ -80,166 +77,126 @@ where
         .into_iter()
         .find(|f| f.iden.to_string() == conflict_column)
         .and_then(|f| f.sea_value().cloned());
-    let (columns, sea_values) = fields.for_sea_insert();
-
-    let mut query = Query::insert();
-    query
-        .into_table(D::table_ref())
+    let (columns, values) = fields.for_sea_insert();
+    let mut q = Query::insert();
+    q.into_table(D::table_ref())
         .columns(columns)
-        .values(sea_values)
-        .change_context_lazy(|| Error::Message("failed to upsert record".to_string()))?;
-
-    let on_conflict = if update_columns.is_empty() {
+        .values(values)
+        .change_context_lazy(|| Error::Message("failed to upsert record".into()))?;
+    let conflict = if update_columns.is_empty() {
         OnConflict::column(Alias::new(conflict_column))
             .do_nothing()
             .to_owned()
     } else {
-        let mut on_conflict = OnConflict::column(Alias::new(conflict_column));
-        for &col in update_columns {
-            on_conflict = on_conflict.update_column(Alias::new(col)).to_owned();
+        let mut c = OnConflict::column(Alias::new(conflict_column));
+        for col in update_columns {
+            c = c.update_column(Alias::new(*col)).to_owned();
         }
-        on_conflict
+        c
     };
-
-    query.on_conflict(on_conflict);
-    query.returning(Query::returning().columns([CommonIden::Id]));
-
-    let (sql, values) = query.build_sqlx(SqliteQueryBuilder);
-    log::debug!("sql: {} values: {:?}", sql, values);
-
-    let sqlx_query = sqlx::query_as_with::<_, (i64,), _>(&sql, values);
-    let row = sqlx_query
-        .fetch_optional(tx.as_mut())
+    q.on_conflict(conflict)
+        .returning(Query::returning().columns([CommonIden::Id]));
+    let (sql, values) = q.build(SqliteQueryBuilder);
+    if let Some(row) = tx
+        .query_one(stmt(sql, values))
         .await
-        .change_context_lazy(|| Error::Message("failed to upsert record".to_string()))?;
-
-    // SQLite's `ON CONFLICT DO NOTHING RETURNING` yields no row on conflict;
-    // fall back to fetching the existing row id by the conflict column.
-    match row {
-        Some((id,)) => Ok(id),
-        None => {
-            let conflict_value = conflict_value.ok_or_else(|| {
-                Error::Message(format!(
-                    "conflict column '{conflict_column}' not found in upsert fields"
-                ))
-            })?;
-            let (sql, values) = Query::select()
-                .from(D::table_ref())
-                .column(CommonIden::Id)
-                .and_where(Expr::col(Alias::new(conflict_column)).eq(conflict_value))
-                .build_sqlx(SqliteQueryBuilder);
-            let (id,) = sqlx::query_as_with::<_, (i64,), _>(&sql, values)
-                .fetch_one(tx.as_mut())
-                .await
-                .change_context_lazy(|| Error::Message("failed to upsert record".to_string()))?;
-            Ok(id)
-        }
+        .change_context_lazy(|| Error::Message("failed to upsert record".into()))?
+    {
+        return row
+            .try_get("", "id")
+            .change_context_lazy(|| Error::Message("failed to read upsert id".into()));
     }
+    let value = conflict_value.ok_or_else(|| {
+        Error::Message(format!(
+            "conflict column '{conflict_column}' not found in upsert fields"
+        ))
+    })?;
+    let (sql, values) = Query::select()
+        .from(D::table_ref())
+        .column(CommonIden::Id)
+        .and_where(Expr::col(Alias::new(conflict_column)).eq(value))
+        .build(SqliteQueryBuilder);
+    let row = tx
+        .query_one(stmt(sql, values))
+        .await
+        .change_context_lazy(|| Error::Message("failed to find existing upsert record".into()))?
+        .ok_or_else(|| Error::Message("missing upsert record".into()))?;
+    row.try_get("", "id")
+        .change_context_lazy(|| Error::Message("failed to read upsert id".into()))
 }
 
 pub async fn dao_fetch_by_column<D, T>(
-    tx: &mut Transaction<'_, Sqlite>,
+    tx: &mut DatabaseTransaction,
     column_name: &str,
     value: &str,
 ) -> AppResult<Option<T>>
 where
     D: Dao,
-    T: for<'r> FromRow<'r, sqlx::sqlite::SqliteRow> + Unpin + Send,
+    T: FromQueryResult + Send + Sync,
 {
     let (sql, values) = Query::select()
         .from(D::table_ref())
         .column(Asterisk)
         .and_where(Expr::col(Alias::new(column_name)).eq(value))
-        .build_sqlx(SqliteQueryBuilder);
-
-    log::debug!("sql: {} values: {:?}", sql, values);
-
-    let result = sqlx::query_as_with::<_, T, _>(&sql, values)
-        .fetch_optional(tx.as_mut())
+        .build(SqliteQueryBuilder);
+    T::find_by_statement(stmt(sql, values))
+        .one(&*tx)
         .await
-        .change_context_lazy(|| Error::Message("failed to fetch record by column".to_string()))?;
-
-    Ok(result)
+        .change_context_lazy(|| Error::Message("failed to fetch record by column".into()))
 }
-pub async fn dao_update<D, E>(tx: &mut Transaction<'_, Sqlite>, id: i64, req: E) -> AppResult<u64>
+
+pub async fn dao_update<D, E>(tx: &mut DatabaseTransaction, id: i64, req: E) -> AppResult<u64>
 where
     E: HasSeaFields,
     D: Dao,
 {
-    let fields = req.not_none_sea_fields();
-    let (columns, sea_values) = fields.for_sea_insert();
-
-    let mut query = Query::update();
-    query
-        .table(D::table_ref())
+    let (columns, values) = req.not_none_sea_fields().for_sea_insert();
+    let mut q = Query::update();
+    q.table(D::table_ref())
         .and_where(Expr::col(CommonIden::Id).eq(id));
-
-    // Add values to update
-    for (column, value) in columns.into_iter().zip(sea_values) {
-        query.value(column, value);
+    for (column, value) in columns.into_iter().zip(values) {
+        q.value(column, value);
     }
-
-    let (sql, values) = query.build_sqlx(SqliteQueryBuilder);
-    log::debug!("sql: {} values: {:?}", sql, values);
-
-    let sqlx_query = sqlx::query_with(&sql, values);
-    let result = sqlx_query
-        .execute(tx.as_mut())
+    let (sql, values) = q.build(SqliteQueryBuilder);
+    Ok(tx
+        .execute(stmt(sql, values))
         .await
-        .change_context_lazy(|| Error::Message("failed to update record".to_string()))?;
-
-    Ok(result.rows_affected())
+        .change_context_lazy(|| Error::Message("failed to update record".into()))?
+        .rows_affected())
 }
 
-pub async fn dao_update_field<D>(
-    tx: &mut Transaction<'_, Sqlite>,
+pub async fn dao_update_field<D: Dao>(
+    tx: &mut DatabaseTransaction,
     id: i64,
     field_name: &str,
     field_value: impl Into<sea_query::Value>,
-) -> AppResult<u64>
-where
-    D: Dao,
-{
-    let mut query = Query::update();
-    query
-        .table(D::table_ref())
+) -> AppResult<u64> {
+    let mut q = Query::update();
+    q.table(D::table_ref())
         .and_where(Expr::col(CommonIden::Id).eq(id))
         .value(Alias::new(field_name), field_value);
-
-    let (sql, values) = query.build_sqlx(SqliteQueryBuilder);
-    log::debug!("sql: {} values: {:?}", sql, values);
-
-    let sqlx_query = sqlx::query_with(&sql, values);
-    let result = sqlx_query
-        .execute(tx.as_mut())
+    let (sql, values) = q.build(SqliteQueryBuilder);
+    Ok(tx
+        .execute(stmt(sql, values))
         .await
-        .change_context_lazy(|| Error::Message("failed to update field".to_string()))?;
-
-    Ok(result.rows_affected())
+        .change_context_lazy(|| Error::Message("failed to update field".into()))?
+        .rows_affected())
 }
 
-pub async fn dao_fetch_by_id<D, T>(
-    tx: &mut Transaction<'_, Sqlite>,
-    id: i64,
-) -> AppResult<Option<T>>
+pub async fn dao_fetch_by_id<D, T>(tx: &mut DatabaseTransaction, id: i64) -> AppResult<Option<T>>
 where
     D: Dao,
-    T: for<'r> FromRow<'r, sqlx::sqlite::SqliteRow> + Unpin + Send,
+    T: FromQueryResult + Send + Sync,
 {
     let (sql, values) = Query::select()
         .from(D::table_ref())
         .column(Asterisk)
         .and_where(Expr::col(CommonIden::Id).eq(id))
-        .build_sqlx(SqliteQueryBuilder);
-
-    log::debug!("sql: {} values: {:?}", sql, values);
-
-    let result = sqlx::query_as_with::<_, T, _>(&sql, values)
-        .fetch_optional(tx.as_mut())
+        .build(SqliteQueryBuilder);
+    T::find_by_statement(stmt(sql, values))
+        .one(&*tx)
         .await
-        .change_context_lazy(|| Error::Message("failed to fetch record by id".to_string()))?;
-
-    Ok(result)
+        .change_context_lazy(|| Error::Message("failed to fetch record by id".into()))
 }
 
 pub struct DaoQueryBuilder<D: Dao> {
@@ -307,39 +264,32 @@ impl<D: Dao> DaoQueryBuilder<D> {
         self
     }
 
-    pub async fn fetch_all<T>(self, tx: &mut Transaction<'_, Sqlite>) -> AppResult<Vec<T>>
+    pub async fn fetch_all<T>(self, tx: &mut DatabaseTransaction) -> AppResult<Vec<T>>
     where
-        T: for<'r> FromRow<'r, sqlx::sqlite::SqliteRow> + Unpin + Send,
+        T: FromQueryResult + Send + Sync,
     {
-        let (sql, values) = self.query.build_sqlx(SqliteQueryBuilder);
-        log::debug!("sql: {} values: {:?}", sql, values);
-
-        let result = sqlx::query_as_with::<_, T, _>(&sql, values)
-            .fetch_all(tx.as_mut())
+        let (sql, values) = self.query.build(SqliteQueryBuilder);
+        T::find_by_statement(stmt(sql, values))
+            .all(&*tx)
             .await
-            .change_context_lazy(|| Error::Message("failed to fetch records".to_string()))?;
-
-        Ok(result)
+            .change_context_lazy(|| Error::Message("failed to fetch records".into()))
     }
 
-    pub async fn count(self, tx: &mut Transaction<'_, Sqlite>) -> AppResult<i64> {
-        let mut count_query = Query::select();
-        count_query
+    pub async fn count(self, tx: &mut DatabaseTransaction) -> AppResult<i64> {
+        let mut query = Query::select();
+        query
             .from(D::table_ref())
-            .expr(Expr::col(CommonIden::Id).count());
-
+            .expr_as(Expr::col(CommonIden::Id).count(), Alias::new("total"));
         for condition in self.conditions {
-            count_query.cond_where(condition);
+            query.cond_where(condition);
         }
-
-        let (sql, values) = count_query.build_sqlx(SqliteQueryBuilder);
-        log::debug!("sql: {} values: {:?}", sql, values);
-
-        let result = sqlx::query_with(&sql, values)
-            .fetch_one(tx.as_mut())
+        let (sql, values) = query.build(SqliteQueryBuilder);
+        let row = tx
+            .query_one(stmt(sql, values))
             .await
-            .change_context_lazy(|| Error::Message("failed to count records".to_string()))?;
-
-        Ok(result.get::<i64, _>(0))
+            .change_context_lazy(|| Error::Message("failed to count records".into()))?
+            .ok_or_else(|| Error::Message("missing count result".into()))?;
+        row.try_get("", "total")
+            .change_context_lazy(|| Error::Message("failed to read count".into()))
     }
 }

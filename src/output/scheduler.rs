@@ -1,3 +1,4 @@
+use sea_orm::TransactionTrait;
 use std::{str::FromStr, sync::Arc, time::Instant};
 
 use error_stack::ResultExt;
@@ -51,7 +52,7 @@ impl Scheduler {
 
     async fn add_job_and_update_db(
         &self,
-        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        tx: &mut sea_orm::DatabaseTransaction,
         task: &crate::domain::models::sync_data_task::SyncDataTask,
         job: tokio_cron_scheduler::Job,
     ) -> AppResult<()> {
@@ -85,7 +86,7 @@ impl Scheduler {
 
     pub async fn update(&self, id: i64) -> AppResult<()> {
         let mut tx =
-            self.db.pool.begin().await.change_context_lazy(|| {
+            self.db.orm().begin().await.change_context_lazy(|| {
                 Error::Message("failed to begin transaction".to_string())
             })?;
         let sync_data_task = SyncDataTaskDao::first(&mut tx).await?;
@@ -116,7 +117,7 @@ impl Scheduler {
 
     pub async fn init_from_db(self) -> AppResult<Self> {
         let mut tx =
-            self.db.pool.begin().await.change_context_lazy(|| {
+            self.db.orm().begin().await.change_context_lazy(|| {
                 Error::Message("failed to begin transaction".to_string())
             })?;
         if let Some(task) = SyncDataTaskDao::first(&mut tx).await? {

@@ -1,23 +1,34 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { getVulnerabilities, getPlugins, pushVuln } from '../../lib/api'
+import TriggerReceiptButton from '../../components/TriggerReceiptButton'
+import ReceiptBadge from '../../components/ReceiptBadge'
+import ReceiptCaseModal from '../../components/ReceiptCaseModal'
+import { getVulnerabilities, getPlugins } from '../../lib/api'
 
 const VulnerabilityListPage = () => {
   const [vulnerabilities, setVulnerabilities] = useState([])
+  const [receiptCase, setReceiptCase] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [pageNo, setPageNo] = useState(1)
   const [pageSize] = useState(10)
   const [totalCount, setTotalCount] = useState(0)
   const [plugins, setPlugins] = useState([])
-    const [pushingId, setPushingId] = useState(null)
   // 新的筛选条件状态
   const [filters, setFilters] = useState({
     cve: '',
     title: '',
-    pushed: '',
     source_name: ''  // 存储插件的name字段
   })
+
+  const fetchPlugins = async () => {
+    try {
+      const response = await getPlugins()
+      setPlugins(response.data.data)
+    } catch (err) {
+      console.error('获取插件列表失败:', err)
+    }
+  }
 
   useEffect(() => {
     fetchPlugins()
@@ -27,29 +38,9 @@ const VulnerabilityListPage = () => {
     fetchVulnerabilities()
   }, [pageNo, filters])
 
-  const handlePushVuln = async (vuln) => {
-        setPushingId(vuln.id)
-        try {
-            await pushVuln(vuln.id)
-        } catch (err) {
-            setError(err.response?.data?.data?.message || '推送失败')
-            console.error('Push error:', err)
-        } finally {
-            setPushingId(null)
-        }
-    }
 
-const fetchPlugins = async () => {
-    try {
-      const response = await getPlugins()
-      setPlugins(response.data.data)
-    } catch (err) {
-      console.error('获取插件列表失败:', err)
-    }
-  }
-
-  const fetchVulnerabilities = async () => {
-    setLoading(true)
+  const fetchVulnerabilities = async (silent = false) => {
+    if (!silent) setLoading(true)
     setError('')
 
     try {
@@ -73,7 +64,7 @@ const fetchPlugins = async () => {
       setError('获取漏洞列表失败')
       console.error('Fetch vulnerabilities error:', err)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -105,8 +96,7 @@ const handleSourceFilterChange = (e) => {
     setFilters({
       cve: '',
       title: '',
-      pushed: '',
-      source_name: ''
+        source_name: ''
     })
     // 重置页码到第一页
     setPageNo(1)
@@ -157,21 +147,6 @@ const handleSourceFilterChange = (e) => {
             />
           </div>
           <div>
-            <label htmlFor="pushed" className="block text-sm font-medium text-gray-700">
-              推送状态
-            </label>
-            <select
-              name="pushed"
-              id="pushed"
-              value={filters.pushed}
-              onChange={handleFilterChange}
-              className="block w-full px-3 py-2 placeholder-gray-400 border border-gray-300 rounded-md shadow-sm appearance-none focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-            >
-              <option value="">全部</option>
-              <option value="true">已推送</option>
-              <option value="false">未推送</option>
-            </select>
-          </div>
           <div>
             <label htmlFor="source" className="block text-sm font-medium text-gray-700">
               来源
@@ -191,6 +166,7 @@ const handleSourceFilterChange = (e) => {
               ))}
             </select>
           </div>
+        </div>
         </div>
         <div className="flex justify-end mt-4">
           <button
@@ -269,19 +245,10 @@ const handleSourceFilterChange = (e) => {
                               minute: '2-digit'
                             })}</time>
                           </p>
-                          <span className={`ml-4 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            vuln.pushed ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                          }`}>
-                            {vuln.pushed ? '已推送' : '未推送'}
-                          </span>
-                          <button
-                              type="button"
-                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handlePushVuln(vuln) }}
-                              disabled={pushingId === vuln.id}
-                              className="ml-2 inline-flex items-center px-2.5 py-0.5 border border-indigo-300 rounded-full text-xs font-medium text-indigo-700 bg-white hover:bg-indigo-50 disabled:opacity-50"
-                          >
-                              {pushingId === vuln.id ? '推送中' : '推送'}
-                          </button>
+                          <ReceiptBadge receipt={vuln.receipt} />
+                          {(vuln.stacks || '').split(',').filter(Boolean).map(slug => <span key={slug} className="ml-1 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700">{slug}</span>)}
+                          <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (vuln.receipt) setReceiptCase(vuln.receipt.case_id); else window.alert('该漏洞尚未发起影响确认。') }} className="ml-2 inline-flex items-center px-2.5 py-0.5 border border-emerald-300 rounded-full text-xs font-medium text-emerald-700 bg-white hover:bg-emerald-50">查看确认</button>
+                          <TriggerReceiptButton sourceType="vuln" sourceId={vuln.id} onComplete={() => fetchVulnerabilities(true)} />
                         </div>
                       </div>
                       <div className="mt-2">
@@ -332,6 +299,7 @@ const handleSourceFilterChange = (e) => {
           </div>
         </>
       )}
+    {receiptCase && <ReceiptCaseModal caseId={receiptCase} onClose={() => setReceiptCase(null)} onChanged={fetchVulnerabilities} />}
     </div>
   )
 }
