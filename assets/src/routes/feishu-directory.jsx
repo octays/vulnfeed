@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import api from '../lib/api'
+import PeoplePicker from '../components/PeoplePicker'
 
 const input = 'px-3 py-2 border rounded w-full text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500'
 const button = 'px-3 py-1.5 text-white bg-indigo-600 rounded text-sm disabled:opacity-50 hover:bg-indigo-700'
@@ -46,9 +47,6 @@ export default function FeishuDirectory() {
   const options = (rows, label) => rows.map(r => <option key={r.id} value={r.id}>{label(r)}</option>)
   const personName = (openId) => contacts.find(p => p.open_id === (openId || '').trim())?.name
   return <div className="space-y-5">
-    <datalist id="dim-owner-people">
-      {contacts.map(p => <option key={p.open_id} value={p.open_id}>{p.department ? `${p.name} · ${p.department}` : p.name}</option>)}
-    </datalist>
     {error && <p className="p-2 text-sm text-red-700 bg-red-50 rounded">{error}</p>}
 
     <SubHead title="飞书应用" hint="企业自建应用凭据；卡片与催办均通过启用的应用发送" />
@@ -104,22 +102,17 @@ export default function FeishuDirectory() {
       if (dimDraft?.id === d.id) {
         const draft = dimDraft
         return <div key={d.id} className="p-3 border border-indigo-200 rounded-lg bg-indigo-50/40 space-y-2">
-          <div className="grid gap-2 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-2">
             <label className="text-xs text-gray-600">维度名称<input className={input + ' mt-1'} value={draft.name} onChange={e => setDimDraft({ ...draft, name: e.target.value })} /></label>
-            <label className="text-xs text-gray-600">负责人姓名（展示用）<input className={input + ' mt-1'} value={draft.owner_name} onChange={e => setDimDraft({ ...draft, owner_name: e.target.value })} /></label>
-            <label className="text-xs text-gray-600">负责人 Open ID<input className={input + ' mt-1'} list="dim-owner-people" placeholder="选择或粘贴 ou_…" value={draft.owner_open_id} onChange={e => {
-              const openId = e.target.value
-              const picked = contacts.find(p => p.open_id === openId.trim())
-              setDimDraft({
-                ...draft,
-                owner_open_id: openId,
-                owner_name: picked && !draft.owner_name.trim() ? picked.name : draft.owner_name,
-              })
-            }} /></label>
+            <div className="text-xs text-gray-600">
+              负责人（催办私发对象）
+              <div className="mt-1">
+                <PeoplePicker contacts={contacts} value={{ open_id: draft.owner_open_id, name: draft.owner_name }}
+                  onChange={picked => setDimDraft({ ...draft, owner_open_id: picked.open_id, owner_name: picked.name })} />
+              </div>
+              {!draft.owner_open_id.trim() && <p className="mt-1 text-amber-600">未选择负责人：催办将走群 @</p>}
+            </div>
           </div>
-          <p className="text-xs text-gray-500">
-            {draft.owner_open_id.trim() ? <>当前指向：<b>{personName(draft.owner_open_id.trim()) || draft.owner_open_id.trim()}</b></> : '留空则催办走群 @、卡片不 @'}
-          </p>
           <div className="flex gap-2">
             <button className={button} disabled={busy || !draft.name.trim()} onClick={() => runDim(async () => {
               await api.put(`/receipts/dimensions/${d.id}`, {

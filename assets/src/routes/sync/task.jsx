@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import api, { getSyncDataTask, createOrUpdateSyncDataTask, runSyncDataTaskNow } from '../../lib/api'
 import FeishuDirectory from '../feishu-directory'
+import PeoplePicker from '../../components/PeoplePicker'
 
 const input = 'block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm'
 const primary = 'inline-flex justify-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50'
@@ -198,14 +199,12 @@ const SyncDataTaskPage = () => {
                 <Toggle id="allow_response_deletion" label="允许填写人删除自己的回执" hint="开启后确认卡片显示「删除我的回执」按钮（软删除并保留审计）；关闭则只能再次提交覆盖。" checked={task.allow_response_deletion} onChange={handleChange} />
               </div>
               <div className="mt-3 p-3 rounded-lg border border-gray-200 bg-gray-50/60">
-                <label htmlFor="remind_escalate_open_id" className="block text-sm font-medium text-gray-700">催办升级提醒人</label>
-                <input id="remind_escalate_open_id" name="remind_escalate_open_id" list="sync-people" type="text" value={task.remind_escalate_open_id} onChange={handleChange} className={`mt-1 ${input}`} placeholder="从右侧选择或输入 ou_…（第 3 次催办起通知，留空不升级）" />
-                <datalist id="sync-people">
-                  {contacts.map(p => <option key={p.open_id} value={p.open_id}>{p.department ? `${p.name} · ${p.department}` : p.name}</option>)}
-                </datalist>
-                <p className="mt-1 text-xs text-gray-500">
-                  {escalateName ? <>当前：<b>{escalateName}</b>（{task.remind_escalate_open_id}）</> : '输入框可从提交过回执的成员中选，也可直接粘贴任意 ou_ 开头的 Open ID'}
-                </p>
+                <span className="block text-sm font-medium text-gray-700">催办升级提醒人</span>
+                <div className="mt-1">
+                  <PeoplePicker contacts={contacts} value={{ open_id: task.remind_escalate_open_id, name: escalateName || '' }}
+                    onChange={picked => setTask(prev => ({ ...prev, remind_escalate_open_id: picked.open_id }))}
+                    placeholder="搜索姓名 / 部门并选择（第 3 次催办起通知，留空不升级）" />
+                </div>
               </div>
             </Section>
 
