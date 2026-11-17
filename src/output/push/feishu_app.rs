@@ -456,14 +456,37 @@ impl FeishuApp {
         card: &Value,
         request_id: &str,
     ) -> Result<String, FeishuAppError> {
-        if chat_id.trim().is_empty() || request_id.trim().is_empty() {
+        self.send_interactive("chat_id", chat_id, card, request_id)
+            .await
+    }
+
+    /// Send an interactive card straight to one user's bot chat
+    /// (催办私发); requires the message-availability scope to cover them.
+    pub async fn send_card_to_open_id(
+        &self,
+        open_id: &str,
+        card: &Value,
+        request_id: &str,
+    ) -> Result<String, FeishuAppError> {
+        self.send_interactive("open_id", open_id, card, request_id)
+            .await
+    }
+
+    async fn send_interactive(
+        &self,
+        receive_id_type: &str,
+        receive_id: &str,
+        card: &Value,
+        request_id: &str,
+    ) -> Result<String, FeishuAppError> {
+        if receive_id.trim().is_empty() || request_id.trim().is_empty() {
             return Err(FeishuAppError::InvalidResponse);
         }
         let token = self.token().await?;
         let http = self.client.post("https://open.feishu.cn/open-apis/im/v1/messages")
-            .query(&[("receive_id_type", "chat_id")])
+            .query(&[("receive_id_type", receive_id_type)])
             .bearer_auth(token)
-            .json(&json!({"receive_id": chat_id, "msg_type": "interactive", "content": card.to_string(), "uuid": request_id}))
+            .json(&json!({"receive_id": receive_id, "msg_type": "interactive", "content": card.to_string(), "uuid": request_id}))
             .send().await?;
         let status = http.status();
         let body = http.text().await.unwrap_or_default();
@@ -471,7 +494,10 @@ impl FeishuApp {
             return Err(FeishuAppError::ApiDetail {
                 status: status.as_u16(),
                 code: -1,
-                message: format!("unparseable response: {}", body.chars().take(240).collect::<String>()),
+                message: format!(
+                    "unparseable response: {}",
+                    body.chars().take(240).collect::<String>()
+                ),
             });
         };
         if !status.is_success() || response.code != 0 {

@@ -160,7 +160,9 @@ async fn create_case_inner(
         .last_insert_id() as i64;
     let task = tx
         .execute(statement(
-            "INSERT INTO receipt_task(case_id) VALUES(?)",
+            // Seed the reminder clock so a fresh case gets its first automatic
+            // nudge only after a full 24h window, not on the next scan.
+            "INSERT INTO receipt_task(case_id,last_reminded_at) VALUES(?,CAST(strftime('%s','now') AS INTEGER))",
             vec![id.into()],
         ))
         .await?;

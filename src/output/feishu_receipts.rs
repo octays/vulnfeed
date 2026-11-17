@@ -176,9 +176,15 @@ fn markdown_from_table(table: &Value) -> Value {
 }
 
 /// Ephemeral nudge card listing dimensions that still owe a receipt. The
-/// reminder loop prepends @ mentions for the dimension owners (plus the
-/// escalation target from the 3rd reminder on) via `with_mentions`.
-pub fn reminder_card(case_id: i64, title: &str, pending: &[(String, String)]) -> Value {
+/// group variant @-mentions the owners via `with_mentions`; the direct
+/// variant is DM'd to one owner (`direct=true` points them back to the
+/// group card instead of "the card above").
+pub fn reminder_card(
+    case_id: i64,
+    title: &str,
+    pending: &[(String, String)],
+    direct: bool,
+) -> Value {
     let lines = pending
         .iter()
         .map(|(name, owner)| {
@@ -194,12 +200,17 @@ pub fn reminder_card(case_id: i64, title: &str, pending: &[(String, String)]) ->
         })
         .collect::<Vec<_>>()
         .join("\n");
+    let submit_hint = if direct {
+        "请到群里的影响确认卡片中提交回执（再次提交可覆盖本维度答案）。"
+    } else {
+        "请在本群上方的影响确认卡片中提交回执；再次点击「提交（可覆盖变更）」可修改本维度答案。"
+    };
     json!({
         "schema": "2.0",
         "config": {"update_multi": true},
         "header": {"title": {"tag": "plain_text", "content": "催办：影响确认"}},
         "body": {"elements": [{"tag": "markdown", "content": format!(
-            "**确认单**：#{case_id} {}\n\n⏳ **未回执 {} 个维度**：\n{lines}\n\n请在本群上方的影响确认卡片中提交回执；再次点击「提交（可覆盖变更）」可修改本维度答案。",
+            "**确认单**：#{case_id} {}\n\n⏳ **未回执 {} 个维度**：\n{lines}\n\n{submit_hint}",
             sanitize(title, 200),
             pending.len()
         )}]}
@@ -722,7 +733,7 @@ mod tests {
             ("P 产线".to_owned(), "乔虎虎".to_owned()),
             ("运维".to_owned(), "郑荣超".to_owned()),
         ];
-        let card = reminder_card(7, "远程代码执行漏洞", &pending);
+        let card = reminder_card(7, "远程代码执行漏洞", &pending, false);
         let text = card.to_string();
         assert!(text.contains("#7"));
         assert!(text.contains("远程代码执行漏洞"));

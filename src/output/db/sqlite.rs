@@ -307,7 +307,10 @@ mod individual_migration_tests {
         .fetch_one(&pool)
         .await
         .unwrap();
-        assert_eq!(row, ("affected".into(), "存量回执".into(), "".into(), "".into()));
+        assert_eq!(
+            row,
+            ("affected".into(), "存量回执".into(), "".into(), "".into())
+        );
         let dims: i64 =
             sqlx::query_scalar("SELECT COUNT(*) FROM receipt_dimension WHERE enabled=1")
                 .fetch_one(&pool)

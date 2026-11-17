@@ -41,7 +41,10 @@ async fn pending_dimensions(
         .collect())
 }
 
-/// Build and send the nudge card for one task; manual and auto paths share this.
+/// Build and send the nudge for one task; manual and auto paths share this.
+/// Dimensions with a configured owner open_id are nudged by direct message
+/// to that owner (no group noise); owners without one — or whose DM failed
+/// (availability/scope) — fall back to the group card with an @ mention.
 pub async fn send_reminder(
     db: &DatabaseConnection,
     task_id: i64,
@@ -79,63 +82,132 @@ pub async fn send_reminder(
         .map(|row| row.try_get::<String>("", "remind_escalate_open_id"))
         .transpose()?
         .unwrap_or_default();
-    // @ the owners of pending dimensions; from the 3rd reminder add the
-    // escalation target (提醒升级).
-    let mut mention_ids: Vec<String> = pending
-        .iter()
-        .map(|(_, _, open_id)| open_id.clone())
-        .filter(|open_id| open_id.starts_with("ou_"))
-        .collect();
-    if remind_count >= ESCALATE_FROM_COUNT
-        && escalate_open_id.starts_with("ou_")
-        && !mention_ids.contains(&escalate_open_id)
-    {
-        mention_ids.push(escalate_open_id);
-    }
-    let chats = db
-        .query_all(Statement::from_sql_and_values(
+    let app_row = db
+        .query_one(Statement::from_string(
             DatabaseBackend::Sqlite,
-            "SELECT c.chat_id,app.app_id,app.app_secret FROM feishu_chat c JOIN feishu_app app ON app.id=c.app_id AND app.enabled=1 WHERE c.enabled=1 ORDER BY c.id",
-            [],
+            "SELECT app_id,app_secret FROM feishu_app WHERE enabled=1 ORDER BY id LIMIT 1",
         ))
         .await?;
-    if chats.is_empty() {
+    let Some(app_row) = app_row else {
         return Err(ReceiptError::NoChats);
-    }
-    let base_card = crate::output::feishu_receipts::reminder_card(
-        case_id,
-        &title,
-        &pending
-            .iter()
-            .map(|(name, owner, _)| (name.clone(), owner.clone()))
-            .collect::<Vec<_>>(),
-    );
+    };
+    let client = FeishuApp::new(
+        app_row.try_get::<String>("", "app_id")?,
+        app_row.try_get::<String>("", "app_secret")?,
+    )
+    .map_err(|e| {
+        log::error!("Feishu app initialization failed: {e}");
+        ReceiptError::NoChats
+    })?;
     let mut outcome = ReminderOutcome {
         sent: Vec::new(),
         failed: Vec::new(),
     };
-    for chat in chats {
-        let chat_id: String = chat.try_get("", "chat_id")?;
-        let app_id: String = chat.try_get("", "app_id")?;
-        let app_secret: String = chat.try_get("", "app_secret")?;
+    // Direct nudge: one DM per pending dimension owner.
+    let mut group_fallback: Vec<(String, String, String)> = Vec::new();
+    for dimension in &pending {
+        let (name, owner, open_id) = dimension;
+        if !open_id.starts_with("ou_") {
+            group_fallback.push(dimension.clone());
+            continue;
+        }
+        let card = crate::output::feishu_receipts::reminder_card(
+            case_id,
+            &title,
+            &[(name.clone(), owner.clone())],
+            true,
+        );
         let request_id = uuid::Uuid::new_v4().to_string();
-        let card =
-            crate::output::feishu_receipts::with_mentions(&base_card, &mention_ids.join(","));
-        let result = match FeishuApp::new(app_id, app_secret) {
-            Ok(client) => client.send_card(&chat_id, &card, &request_id).await,
+        match client
+            .send_card_to_open_id(open_id, &card, &request_id)
+            .await
+        {
+            Ok(_) => outcome.sent.push(open_id.clone()),
             Err(e) => {
-                log::error!("Feishu app initialization failed: {e}");
-                outcome.failed.push((chat_id, e.to_string()));
-                continue;
-            }
-        };
-        match result {
-            Ok(_) => outcome.sent.push(chat_id),
-            Err(e) => {
-                log::error!("Feishu reminder delivery failed for group {chat_id}: {e}");
-                outcome.failed.push((chat_id, e.to_string()));
+                log::warn!("reminder DM failed for {name} ({open_id}); falling back to group: {e}");
+                outcome.failed.push((open_id.clone(), e.to_string()));
+                group_fallback.push(dimension.clone());
             }
         }
+    }
+    // Escalation (from the 3rd reminder on): DM the escalation target the
+    // full pending list; failures fall back to a group @ mention.
+    let mut escalate_fallback = false;
+    if remind_count >= ESCALATE_FROM_COUNT && escalate_open_id.starts_with("ou_") {
+        let card = crate::output::feishu_receipts::reminder_card(
+            case_id,
+            &title,
+            &pending
+                .iter()
+                .map(|(name, owner, _)| (name.clone(), owner.clone()))
+                .collect::<Vec<_>>(),
+            true,
+        );
+        let request_id = uuid::Uuid::new_v4().to_string();
+        match client
+            .send_card_to_open_id(&escalate_open_id, &card, &request_id)
+            .await
+        {
+            Ok(_) => outcome.sent.push(escalate_open_id.clone()),
+            Err(e) => {
+                log::warn!(
+                    "escalation DM failed ({escalate_open_id}); falling back to group @: {e}"
+                );
+                outcome
+                    .failed
+                    .push((escalate_open_id.clone(), e.to_string()));
+                escalate_fallback = true;
+            }
+        }
+    }
+    // Group fallback: only when someone could not be DM'd.
+    if !group_fallback.is_empty() || escalate_fallback {
+        let chats = db
+            .query_all(Statement::from_sql_and_values(
+                DatabaseBackend::Sqlite,
+                "SELECT c.chat_id FROM feishu_chat c JOIN feishu_app app ON app.id=c.app_id AND app.enabled=1 WHERE c.enabled=1 ORDER BY c.id",
+                [],
+            ))
+            .await?;
+        if chats.is_empty() {
+            return Err(ReceiptError::NoChats);
+        }
+        let mut mention_ids: Vec<String> = group_fallback
+            .iter()
+            .map(|(_, _, open_id)| open_id.clone())
+            .filter(|open_id| open_id.starts_with("ou_"))
+            .collect();
+        if escalate_fallback && !mention_ids.contains(&escalate_open_id) {
+            mention_ids.push(escalate_open_id);
+        }
+        let fallback_pending: Vec<(String, String)> = group_fallback
+            .iter()
+            .map(|(name, owner, _)| (name.clone(), owner.clone()))
+            .collect();
+        let base_card = crate::output::feishu_receipts::reminder_card(
+            case_id,
+            &title,
+            &fallback_pending,
+            false,
+        );
+        for chat in chats {
+            let chat_id: String = chat.try_get("", "chat_id")?;
+            let request_id = uuid::Uuid::new_v4().to_string();
+            let card =
+                crate::output::feishu_receipts::with_mentions(&base_card, &mention_ids.join(","));
+            match client.send_card(&chat_id, &card, &request_id).await {
+                Ok(_) => outcome.sent.push(chat_id),
+                Err(e) => {
+                    log::error!("Feishu reminder delivery failed for group {chat_id}: {e}");
+                    outcome.failed.push((chat_id, e.to_string()));
+                }
+            }
+        }
+    }
+    if outcome.sent.is_empty() {
+        // Every DM and group attempt failed: surface as a failed reminder so
+        // the scheduler does not burn the 24h interval.
+        return Err(ReceiptError::NoChats);
     }
     Ok(outcome)
 }
@@ -259,5 +331,42 @@ mod tests {
             .await
             .unwrap();
         assert!(due_tasks(&orm).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn fresh_case_waits_a_full_interval_before_its_first_nudge() {
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::migrate!("./migrations").run(&pool).await.unwrap();
+        for sql in [
+            "INSERT INTO sync_task(name,interval_minutes,status,auto_remind) VALUES('sync',15,1,1)",
+            "INSERT INTO vuln_information(key,title) VALUES('k','t')",
+        ] {
+            sqlx::query(sql).execute(&pool).await.unwrap();
+        }
+        let orm = sea_orm::SqlxSqliteConnector::from_sqlx_sqlite_pool(pool.clone());
+        let case_id = crate::output::receipts::create_case(&orm, "vuln", 1)
+            .await
+            .unwrap();
+        // The task is created with a current reminder clock: no nudge until
+        // 24h have passed since the case was opened.
+        let seeded: i64 =
+            sqlx::query_scalar("SELECT last_reminded_at FROM receipt_task WHERE case_id=?")
+                .bind(case_id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert!(seeded > 0, "reminder clock must be seeded at creation");
+        assert!(due_tasks(&orm).await.unwrap().is_empty());
+        sqlx::query("UPDATE receipt_task SET last_reminded_at=0 WHERE case_id=?")
+            .bind(case_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        let due = due_tasks(&orm).await.unwrap();
+        assert_eq!(due.len(), 1);
     }
 }
