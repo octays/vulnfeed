@@ -29,6 +29,7 @@ pub enum FeishuAppError {
 }
 
 // Do not derive Debug: the app secret must not appear in logs.
+#[derive(Clone)]
 pub struct FeishuApp {
     client: Client,
     app_id: String,
@@ -148,6 +149,8 @@ struct DeptUsersData {
 struct DeptUserNode {
     #[serde(default)]
     open_id: String,
+    #[serde(default)]
+    name: Option<String>,
 }
 #[derive(Deserialize)]
 struct FeishuUser {
@@ -571,11 +574,11 @@ impl FeishuApp {
         Ok(departments)
     }
 
-    /// The open_ids of a department's direct members (paginated).
-    pub async fn department_member_ids(
+    /// A department's direct members as (open_id, display name) (paginated).
+    pub async fn department_members(
         &self,
         department_id: &str,
-    ) -> Result<Vec<String>, FeishuAppError> {
+    ) -> Result<Vec<(String, String)>, FeishuAppError> {
         if department_id.trim().is_empty() || department_id.len() > 100 {
             return Err(FeishuAppError::InvalidResponse);
         }
@@ -617,7 +620,7 @@ impl FeishuApp {
             let Some(data) = result.data else { break };
             for node in data.items {
                 if node.open_id.starts_with("ou_") {
-                    members.push(node.open_id);
+                    members.push((node.open_id, node.name.unwrap_or_default()));
                 }
             }
             match data.has_more {

@@ -6,6 +6,7 @@ use poem::{
 use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement, Value};
 use serde::Deserialize;
 use serde_json::{Value as JsonValue, json};
+use std::sync::Arc;
 
 fn err(e: sea_orm::DbErr) -> ApiError {
     log::error!("Feishu directory error: {e}");
@@ -299,4 +300,82 @@ pub async fn sync_members<S: VulnService + Send + Sync + 'static>(
     Ok(Json(
         json!({"synced": summary.synced, "failed": summary.failed}),
     ))
+}
+
+/// Cap the directory listing so a huge tenant cannot stall the request.
+const DIRECTORY_MEMBERS_CAP: usize = 2000;
+const DIRECTORY_MEMBERS_TTL_SECS: u64 = 3600;
+
+type MemberCache = tokio::sync::RwLock<Option<(std::time::Instant, Arc<Vec<JsonValue>>)>>;
+static MEMBER_CACHE: std::sync::LazyLock<MemberCache> =
+    std::sync::LazyLock::new(|| tokio::sync::RwLock::new(None));
+
+/// All tenant members visible to the app as {open_id, name, department},
+/// pulled per-department in parallel and cached in-process for an hour.
+/// Powers the owner/escalation pickers in the admin UI; requires the app's
+/// contact data scope to cover the members.
+#[handler]
+pub async fn list_members<S: VulnService + Send + Sync + 'static>(
+    state: Data<&Ctx<S>>,
+) -> Result<Json<JsonValue>, ApiError> {
+    if let Some((built_at, cached)) = MEMBER_CACHE.read().await.as_ref()
+        && built_at.elapsed().as_secs() < DIRECTORY_MEMBERS_TTL_SECS
+    {
+        return Ok(Json(json!({"data": cached.clone(), "cached": true})));
+    }
+    let row = state
+        .db
+        .orm()
+        .query_one(Statement::from_string(
+            DatabaseBackend::Sqlite,
+            "SELECT app_id,app_secret FROM feishu_app WHERE enabled=1 ORDER BY id LIMIT 1",
+        ))
+        .await
+        .map_err(err)?
+        .ok_or_else(|| ApiError::BadRequest("没有启用的飞书应用".into()))?;
+    let app_id: String = row.try_get("", "app_id").map_err(err)?;
+    let app_secret: String = row.try_get("", "app_secret").map_err(err)?;
+    let client = crate::output::push::feishu_app::FeishuApp::new(app_id, app_secret)
+        .map_err(|e| ApiError::InternalServerError(format!("飞书应用初始化失败：{e}")))?;
+    let departments = client
+        .visible_departments()
+        .await
+        .map_err(|e| ApiError::InternalServerError(format!("读取部门失败：{e}")))?;
+    let mut seen = std::collections::HashMap::<String, (String, String)>::new();
+    let mut jobs = tokio::task::JoinSet::new();
+    for (department_id, department_name) in departments {
+        let client = client.clone();
+        jobs.spawn(async move {
+            (
+                department_name,
+                client.department_members(&department_id).await,
+            )
+        });
+    }
+    while let Some(job) = jobs.join_next().await
+        && let Ok((department, result)) = job
+    {
+        match result {
+            Ok(members) => {
+                for (open_id, name) in members {
+                    seen.entry(open_id).or_insert_with(|| (name, department.clone()));
+                }
+            }
+            Err(e) => {
+                log::warn!("directory member fetch failed for {department}: {e}");
+            }
+        }
+    }
+    let mut members: Vec<(String, (String, String))> = seen.into_iter().collect();
+    members.sort_by(|a, b| a.1 .0.cmp(&b.1 .0).then(a.0.cmp(&b.0)));
+    members.truncate(DIRECTORY_MEMBERS_CAP);
+    let data: Vec<JsonValue> = members
+        .into_iter()
+        .map(|(open_id, (name, department))| {
+            json!({"open_id": open_id, "name": name, "department": department})
+        })
+        .collect();
+    let data = Arc::new(data);
+    *MEMBER_CACHE.write().await = Some((std::time::Instant::now(), data.clone()));
+    Ok(Json(json!({"data": data, "cached": false})))
 }

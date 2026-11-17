@@ -67,9 +67,9 @@ async fn build(client: &FeishuApp, guard: &mut State) -> Result<(), String> {
     let mut names = HashMap::new();
     for (department_id, name) in &departments {
         names.insert(department_id.clone(), name.clone());
-        match client.department_member_ids(department_id).await {
-            Ok(open_ids) => {
-                for open_id in open_ids {
+        match client.department_members(department_id).await {
+            Ok(entries) => {
+                for (open_id, _) in entries {
                     // First department wins, mirroring the stable ORDER BY of
                     // the previous persistent cache.
                     members

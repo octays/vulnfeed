@@ -154,6 +154,10 @@ fn api_routes<S: VulnService + Send + Sync + 'static>() -> impl Endpoint {
                         .at("/apps/:id", put(feishu_apps::update::<S>::default()))
                         .at("/directory", get(feishu_directory::list::<S>::default()))
                         .at(
+                            "/directory/members",
+                            get(feishu_directory::list_members::<S>::default()),
+                        )
+                        .at(
                             "/directory/sync-members",
                             post(feishu_directory::sync_members::<S>::default()),
                         )

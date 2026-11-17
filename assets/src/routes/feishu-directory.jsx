@@ -1,7 +1,19 @@
 import { useEffect, useState } from 'react'
 import api from '../lib/api'
-const input = 'px-3 py-2 border rounded w-full'
-const button = 'px-3 py-2 text-white bg-indigo-600 rounded disabled:opacity-50'
+
+const input = 'px-3 py-2 border rounded w-full text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500'
+const button = 'px-3 py-1.5 text-white bg-indigo-600 rounded text-sm disabled:opacity-50 hover:bg-indigo-700'
+const link = 'text-indigo-700 hover:underline'
+const card = 'p-3 border border-gray-200 rounded-lg'
+
+function SubHead({ title, hint }) {
+  return (
+    <div className="pt-2 border-t border-gray-200">
+      <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
+      {hint && <p className="mt-0.5 text-xs text-gray-500">{hint}</p>}
+    </div>
+  )
+}
 
 export default function FeishuDirectory() {
   const [apps, setApps] = useState([])
@@ -13,29 +25,45 @@ export default function FeishuDirectory() {
   const [busy, setBusy] = useState(false)
   async function refresh() { const [a, d] = await Promise.all([api.get('/receipts/apps'), api.get('/receipts/directory')]); setApps(a.data.data); setData(d.data) }
   const [people, setPeople] = useState([])
+  const [members, setMembers] = useState(null)
   const [dims, setDims] = useState([])
+  const [dimDraft, setDimDraft] = useState(null)
   async function refreshDims() { const r = await api.get('/receipts/dimensions'); setDims(r.data.data || []) }
   async function runDim(fn) { setBusy(true); setError(''); try { await fn(); await refreshDims() } catch (e) { setError(e.response?.data?.data?.message || '操作失败') } finally { setBusy(false) } }
   useEffect(() => { refreshDims().catch(() => {}) }, [])
   useEffect(() => { api.get('/receipts/people').then(r => setPeople(r.data.data || [])).catch(() => {}) }, [])
+  // Full tenant directory (per-department, cached server-side); falls back to
+  // receipt submitters only when the contact scope is missing.
+  useEffect(() => { api.get('/receipts/directory/members').then(r => setMembers(r.data.data || [])).catch(() => setMembers([])) }, [])
+  const contacts = Object.values(
+    [...people.map(p => ({ open_id: p.open_id, name: p.name, department: '' })), ...(members || [])]
+      .reverse()
+      .reduce((acc, c) => { if (c.open_id) acc[c.open_id] = c; return acc }, {}),
+  ).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh'))
   useEffect(() => { api.get('/tech_stacks').then(r => setStacks((r.data.data || []).filter(t => t.enabled))).catch(() => {}) }, [])
   useEffect(() => { refresh().catch(() => setError('获取飞书配置失败')) }, [])
   async function run(fn) { setBusy(true); setError(''); try { await fn(); await refresh() } catch (e) { setError(e.response?.data?.data?.message || e.response?.data?.message || '操作失败，请检查配置和日志') } finally { setBusy(false) } }
   const options = (rows, label) => rows.map(r => <option key={r.id} value={r.id}>{label(r)}</option>)
-  return <section className="p-5 space-y-5 bg-white rounded shadow">
-    <h2 className="text-lg font-semibold">飞书应用和接收群</h2>
-    <p className="text-sm text-gray-600">配置应用和接收群后，卡片会发送到所有启用的群；填写人的团队与姓名由飞书部门/通讯录自动解析，无需提前录入人员。</p>
-    {error && <p className="p-2 text-red-700 bg-red-50">{error}</p>}
+  const personName = (openId) => contacts.find(p => p.open_id === (openId || '').trim())?.name
+  return <div className="space-y-5">
+    <datalist id="dim-owner-people">
+      {contacts.map(p => <option key={p.open_id} value={p.open_id}>{p.department ? `${p.name} · ${p.department}` : p.name}</option>)}
+    </datalist>
+    {error && <p className="p-2 text-sm text-red-700 bg-red-50 rounded">{error}</p>}
+
+    <SubHead title="飞书应用" hint="企业自建应用凭据；卡片与催办均通过启用的应用发送" />
     <form className="grid gap-2 md:grid-cols-5" onSubmit={e => { e.preventDefault(); run(async () => { await api.post('/receipts/apps', app); setApp({ name:'', app_id:'', app_secret:'', tenant_key:'' }) }) }}>
       {['name','app_id','app_secret','tenant_key'].map((k,i) => <input key={k} className={input} required={k !== 'tenant_key'} type={k === 'app_secret' ? 'password' : 'text'} placeholder={['应用名称','App ID','App Secret','Tenant Key（可留空）'][i]} value={app[k]} onChange={e => setApp({ ...app, [k]:e.target.value })} />)}<button className={button} disabled={busy}>添加应用</button>
     </form>
-    {apps.map(a => <p key={a.id}>{a.name}（{a.app_id}）— {a.enabled ? '启用' : '停用'} <button className="text-indigo-700" onClick={() => run(() => api.put(`/receipts/apps/${a.id}`, { ...a, enabled: !a.enabled }))}>{a.enabled ? '停用' : '启用'}</button> <button className="text-indigo-700" onClick={() => { const name = window.prompt('应用名称', a.name); if (name) run(() => api.put(`/receipts/apps/${a.id}`, { ...a, name })) }}>改名</button> <button className="text-indigo-700" onClick={() => { const secret = window.prompt('输入新 App Secret'); if (secret) run(() => api.put(`/receipts/apps/${a.id}`, { ...a, app_secret:secret })) }}>更换密钥</button></p>)}
+    {apps.map(a => <p key={a.id} className="text-sm">{a.name}（{a.app_id}）— {a.enabled ? '启用' : '停用'} <button className={link} onClick={() => run(() => api.put(`/receipts/apps/${a.id}`, { ...a, enabled: !a.enabled }))}>{a.enabled ? '停用' : '启用'}</button> <button className={link} onClick={() => { const name = window.prompt('应用名称', a.name); if (name) run(() => api.put(`/receipts/apps/${a.id}`, { ...a, name })) }}>改名</button> <button className={link} onClick={() => { const secret = window.prompt('输入新 App Secret'); if (secret) run(() => api.put(`/receipts/apps/${a.id}`, { ...a, app_secret:secret })) }}>更换密钥</button></p>)}
+
+    <SubHead title="接收群" hint="确认卡片发送到所有启用的群；可按技术栈订阅过滤" />
     <form className="grid gap-2 md:grid-cols-4" onSubmit={e => { e.preventDefault(); run(async () => { await api.post('/receipts/directory/chats', { ...chat, stacks: (chat.stacks || []).join(','), app_id:Number(chat.app_id) }); setChat({ ...chat, name:'', chat_id:'', stacks: [] }) }) }}><select className={input} required value={chat.app_id} onChange={e => setChat({ ...chat, app_id:e.target.value })}><option value="">选择应用</option>{options(apps.filter(a=>a.enabled), a=>a.name)}</select><input className={input} placeholder="群名称" required value={chat.name} onChange={e=>setChat({...chat,name:e.target.value})}/><input className={input} placeholder="群 Chat ID（oc_）" required value={chat.chat_id} onChange={e=>setChat({...chat,chat_id:e.target.value})}/><div className="sm:col-span-4 flex flex-wrap gap-3 items-center"><span className="text-sm text-gray-600">订阅：</span>{stacks.map(t => <label key={t.slug} className="inline-flex items-center gap-1 text-sm"><input type="checkbox" checked={(chat.stacks||[]).includes(t.slug)} onChange={e=>setChat({...chat, stacks: e.target.checked?[...(chat.stacks||[]),t.slug]:(chat.stacks||[]).filter(s=>s!==t.slug)})}/>{t.name}</label>)}{stacks.length===0&&<span className="text-xs text-gray-400">先配置技术栈</span>}</div>
 <button className={button} disabled={busy}>添加群</button></form>
-    {data.chats.map(c => <div key={c.id} className="p-3 border rounded">
-      <p>{c.name}（{c.chat_id} · {apps.find(a=>a.id===c.app_id)?.name}）— {c.enabled ? '启用' : '停用'} <button className="text-indigo-700" onClick={()=>run(()=>api.put(`/receipts/directory/chats/${c.id}`,{enabled:!c.enabled}))}>{c.enabled?'停用':'启用'}</button> <button className="text-indigo-700" onClick={()=>{const name=window.prompt('群名称',c.name);if(name)run(()=>api.put(`/receipts/directory/chats/${c.id}`,{name}))}}>改名</button></p>
+    {data.chats.map(c => <div key={c.id} className={card}>
+      <p className="text-sm">{c.name}（{c.chat_id} · {apps.find(a=>a.id===c.app_id)?.name}）— {c.enabled ? '启用' : '停用'} <button className={link} onClick={()=>run(()=>api.put(`/receipts/directory/chats/${c.id}`,{enabled:!c.enabled}))}>{c.enabled?'停用':'启用'}</button> <button className={link} onClick={()=>{const name=window.prompt('群名称',c.name);if(name)run(()=>api.put(`/receipts/directory/chats/${c.id}`,{name}))}}>改名</button></p>
       <p className="mt-1 text-xs text-gray-500">订阅：{c.stacks ? c.stacks.split(',').join('、') : '（全部）'}</p>
-      <p className="text-xs text-gray-500">@ 提醒：{(c.mention_open_ids || '').split(',').filter(Boolean).map(id => people.find(p => p.open_id === id)?.name || id).join('、') || '（无）'}</p>
+      <p className="text-xs text-gray-500">@ 提醒：{(c.mention_open_ids || '').split(',').filter(Boolean).map(id => personName(id) || id).join('、') || '（无）'}</p>
       <div className="flex flex-wrap gap-3 mt-1">
         {people.map(p => (
           <label key={p.open_id} className="inline-flex items-center gap-1 text-sm">
@@ -47,11 +75,11 @@ export default function FeishuDirectory() {
             @{p.name}
           </label>
         ))}
-        <button className="text-indigo-700 text-xs" onClick={() => {
-          const input = window.prompt('追加 Open ID（ou_ 开头，多个逗号分隔）')
-          if (input) run(async () => {
+        <button className={link + ' text-xs'} onClick={() => {
+          const added = window.prompt('追加 Open ID（ou_ 开头，多个逗号分隔）')
+          if (added) run(async () => {
             const cur = (c.mention_open_ids || '').split(',').filter(Boolean)
-            const add = input.split(',').map(x => x.trim()).filter(x => x.startsWith('ou_'))
+            const add = added.split(',').map(x => x.trim()).filter(x => x.startsWith('ou_'))
             await api.put(`/receipts/directory/chats/${c.id}`, { mention_open_ids: [...new Set([...cur, ...add])].join(',') })
           })
         }}>+ 手动追加</button>
@@ -70,16 +98,53 @@ export default function FeishuDirectory() {
         {stacks.length === 0 && <span className="text-xs text-gray-400">先在「技术栈」页配置</span>}
       </div>
     </div>)}
-    <h3 className="text-lg font-medium pt-3 border-t">回执维度（三维度确认）</h3>
-    <p className="text-sm text-gray-600">确认卡片固定 @ 各维度的负责人；三个维度全部完成回执（无影响，或处置流程 + 负责人已记录）后才能关闭确认单。负责人 Open ID 留空则不 @。</p>
-    {dims.map(d => <div key={d.id} className="p-3 border rounded text-sm">
-      <p><b>{d.name}</b>（{d.slug}）— 负责人：{d.owner_name || '未设置'} <button className="text-indigo-700" onClick={() => runDim(async () => {
-        const name = window.prompt('维度名称', d.name); if (name === null) return
-        const owner = window.prompt('维度负责人姓名（仅展示用）', d.owner_name); if (owner === null) return
-        const openId = window.prompt('负责人 Open ID（ou_ 开头，留空则不 @）', d.owner_open_id); if (openId === null) return
-        await api.put(`/receipts/dimensions/${d.id}`, { name, owner_name: owner, owner_open_id: openId.trim(), enabled: d.enabled })
-      })}>编辑</button> <button className="text-indigo-700" onClick={() => runDim(() => api.put(`/receipts/dimensions/${d.id}`, { name: d.name, owner_name: d.owner_name, owner_open_id: d.owner_open_id, enabled: !d.enabled }))}>{d.enabled ? '停用' : '启用'}</button></p>
-      <p className="mt-1 text-xs text-gray-500">@ {d.owner_open_id ? (people.find(p => p.open_id === d.owner_open_id)?.name || d.owner_open_id) : '（未配置，卡片使用群默认 @ 设置）'}</p>
-    </div>)}
-  </section>
+
+    <SubHead title="回执维度（三维度确认）" hint="催办私发到负责人单聊（配了 Open ID 时）；三维度全部完成回执后才能关闭确认单" />
+    {dims.map(d => {
+      if (dimDraft?.id === d.id) {
+        const draft = dimDraft
+        return <div key={d.id} className="p-3 border border-indigo-200 rounded-lg bg-indigo-50/40 space-y-2">
+          <div className="grid gap-2 md:grid-cols-3">
+            <label className="text-xs text-gray-600">维度名称<input className={input + ' mt-1'} value={draft.name} onChange={e => setDimDraft({ ...draft, name: e.target.value })} /></label>
+            <label className="text-xs text-gray-600">负责人姓名（展示用）<input className={input + ' mt-1'} value={draft.owner_name} onChange={e => setDimDraft({ ...draft, owner_name: e.target.value })} /></label>
+            <label className="text-xs text-gray-600">负责人 Open ID<input className={input + ' mt-1'} list="dim-owner-people" placeholder="选择或粘贴 ou_…" value={draft.owner_open_id} onChange={e => {
+              const openId = e.target.value
+              const picked = contacts.find(p => p.open_id === openId.trim())
+              setDimDraft({
+                ...draft,
+                owner_open_id: openId,
+                owner_name: picked && !draft.owner_name.trim() ? picked.name : draft.owner_name,
+              })
+            }} /></label>
+          </div>
+          <p className="text-xs text-gray-500">
+            {draft.owner_open_id.trim() ? <>当前指向：<b>{personName(draft.owner_open_id.trim()) || draft.owner_open_id.trim()}</b></> : '留空则催办走群 @、卡片不 @'}
+          </p>
+          <div className="flex gap-2">
+            <button className={button} disabled={busy || !draft.name.trim()} onClick={() => runDim(async () => {
+              await api.put(`/receipts/dimensions/${d.id}`, {
+                name: draft.name.trim(),
+                owner_name: draft.owner_name.trim(),
+                owner_open_id: draft.owner_open_id.trim(),
+                enabled: d.enabled,
+              })
+              setDimDraft(null)
+            })}>保存</button>
+            <button className="px-3 py-1.5 text-sm text-gray-600 border rounded hover:bg-gray-50" onClick={() => setDimDraft(null)}>取消</button>
+          </div>
+        </div>
+      }
+      return <div key={d.id} className={card + ' text-sm' + (d.enabled ? '' : ' opacity-60')}>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <p><b>{d.name}</b>（{d.slug}）— 负责人：{d.owner_name || '未设置'}
+            {d.owner_open_id && <span className="text-xs text-gray-500"> · {personName(d.owner_open_id) || d.owner_open_id}</span>}
+          </p>
+          <div className="flex gap-3">
+            <button className={link} onClick={() => setDimDraft({ id: d.id, name: d.name, owner_name: d.owner_name, owner_open_id: d.owner_open_id })}>编辑</button>
+            <button className={link} onClick={() => runDim(() => api.put(`/receipts/dimensions/${d.id}`, { name: d.name, owner_name: d.owner_name, owner_open_id: d.owner_open_id, enabled: !d.enabled }))}>{d.enabled ? '停用' : '启用'}</button>
+          </div>
+        </div>
+      </div>
+    })}
+  </div>
 }
