@@ -188,6 +188,10 @@ fn api_routes<S: VulnService + Send + Sync + 'static>() -> impl Endpoint {
                             get(receipts::export_case::<S>::default()),
                         )
                         .at("/people", get(receipts::list_people::<S>::default()))
+                        .at(
+                            "/people/:open_id",
+                            get(receipts::lookup_open_id::<S>::default()),
+                        )
                         .at("/trigger", post(receipts::trigger_case::<S>::default()))
                         .at(
                             "/cases/:id/close",

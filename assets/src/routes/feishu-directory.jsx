@@ -46,6 +46,19 @@ export default function FeishuDirectory() {
   async function run(fn) { setBusy(true); setError(''); try { await fn(); await refresh() } catch (e) { setError(e.response?.data?.data?.message || e.response?.data?.message || '操作失败，请检查配置和日志') } finally { setBusy(false) } }
   const options = (rows, label) => rows.map(r => <option key={r.id} value={r.id}>{label(r)}</option>)
   const personName = (openId) => contacts.find(p => p.open_id === (openId || '').trim())?.name
+  const [mentionDraft, setMentionDraft] = useState(null)
+  async function resolveOpenId(value) {
+    const openId = (value || '').trim()
+    setMentionDraft(d => ({ ...d, openId, resolved: null, error: '' }))
+    if (!openId.startsWith('ou_')) return
+    try {
+      const r = await api.get(`/receipts/people/${encodeURIComponent(openId)}`)
+      setMentionDraft(d => ({ ...d, resolved: r.data }))
+    } catch (e) {
+      setMentionDraft(d => ({ ...d, error: e.response?.data?.data?.message || '查询失败' }))
+    }
+  }
+  const queryHits = (mentionDraft?.query || '').trim() ? contacts.filter(p => (p.name || '').toLowerCase().includes(mentionDraft.query.trim().toLowerCase())).slice(0, 8) : []
   return <div className="space-y-5">
     {error && <p className="p-2 text-sm text-red-700 bg-red-50 rounded">{error}</p>}
 
@@ -73,14 +86,7 @@ export default function FeishuDirectory() {
             @{p.name}
           </label>
         ))}
-        <button className={link + ' text-xs'} onClick={() => {
-          const added = window.prompt('追加 Open ID（ou_ 开头，多个逗号分隔）')
-          if (added) run(async () => {
-            const cur = (c.mention_open_ids || '').split(',').filter(Boolean)
-            const add = added.split(',').map(x => x.trim()).filter(x => x.startsWith('ou_'))
-            await api.put(`/receipts/directory/chats/${c.id}`, { mention_open_ids: [...new Set([...cur, ...add])].join(',') })
-          })
-        }}>+ 手动追加</button>
+        <button className={link + ' text-xs'} onClick={() => setMentionDraft({ chat: c, openId: '', resolved: null, query: '', error: '' })}>+ 添加人员</button>
       </div>
       <div className="flex flex-wrap gap-3 mt-1">
         {stacks.map(t => (
@@ -139,5 +145,38 @@ export default function FeishuDirectory() {
         </div>
       </div>
     })}
+      {mentionDraft && <div className="fixed inset-0 z-50 bg-black/50 p-4 overflow-y-auto" onClick={() => setMentionDraft(null)}>
+        <div className="max-w-lg mx-auto my-16 p-5 bg-white rounded shadow space-y-3" onClick={e => e.stopPropagation()}>
+          <h3 className="font-semibold">添加 @ 提醒人员 — {mentionDraft.chat.name}</h3>
+          <div>
+            <label className="text-xs text-gray-500">按 Open ID 添加（自动查姓名）</label>
+            <div className="flex gap-2">
+              <input className={input} placeholder="ou_ 开头的 Open ID" value={mentionDraft.openId} onChange={e => resolveOpenId(e.target.value)} />
+              <button className={button} disabled={!(mentionDraft.resolved || mentionDraft.openId.startsWith('ou_'))} onClick={() => run(async () => {
+                const cur = (mentionDraft.chat.mention_open_ids || '').split(',').filter(Boolean)
+                const next = [...new Set([...cur, mentionDraft.openId.trim()])].join(',')
+                await api.put(`/receipts/directory/chats/${mentionDraft.chat.id}`, { mention_open_ids: next })
+                setMentionDraft(null)
+              })}>添加</button>
+            </div>
+            {mentionDraft.resolved && <p className="text-xs text-green-700">✓ {mentionDraft.resolved.name}{(mentionDraft.resolved.departments || []).length > 0 ? ` · ${(mentionDraft.resolved.departments || []).join('、')}` : ''}</p>}
+            {mentionDraft.error && <p className="text-xs text-red-700">{mentionDraft.error}</p>}
+          </div>
+          <div>
+            <label className="text-xs text-gray-500">按姓名搜索通讯录</label>
+            <input className={input} placeholder="输入姓名关键字" value={mentionDraft.query} onChange={e => setMentionDraft(d => ({ ...d, query: e.target.value }))} />
+            <div className="mt-2 space-y-1 max-h-48 overflow-y-auto">
+              {queryHits.map(p => <button key={p.open_id} className="block w-full text-left px-3 py-2 text-sm border rounded hover:bg-gray-50" onClick={() => run(async () => {
+                const cur = (mentionDraft.chat.mention_open_ids || '').split(',').filter(Boolean)
+                const next = [...new Set([...cur, p.open_id])].join(',')
+                await api.put(`/receipts/directory/chats/${mentionDraft.chat.id}`, { mention_open_ids: next })
+                setMentionDraft(null)
+              })}>{p.name} <span className="text-xs text-gray-400">{p.open_id}</span></button>)}
+              {(mentionDraft.query || '').trim() && queryHits.length === 0 && <p className="text-xs text-gray-400">通讯录中无匹配（可先按 Open ID 添加，或等通讯录缓存刷新）</p>}
+            </div>
+          </div>
+          <button className={link} onClick={() => setMentionDraft(null)}>关闭</button>
+        </div>
+      </div>}
   </div>
 }

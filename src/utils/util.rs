@@ -51,10 +51,7 @@ pub fn check_over_two_week(date: &str) -> AppResult<bool> {
         .map_err(|e| Error::Message(format!("parse date error: {:?}", e)))?;
     let now = Utc::now().naive_utc().date();
     let two_weeks_ago = now - Duration::weeks(2);
-    if target_date >= two_weeks_ago && target_date <= now {
-        return Ok(false);
-    }
-    Ok(true)
+    Ok(!(target_date >= two_weeks_ago && target_date <= now))
 }
 
 pub fn check_over_two_month(publish_data: &str, update_data: &str) -> Result<bool, Error> {

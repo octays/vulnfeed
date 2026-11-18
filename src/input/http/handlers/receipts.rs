@@ -33,6 +33,46 @@ pub struct CaseRequest {
     source_id: i64,
 }
 
+/// Resolve one open_id to a display name via the per-user contact API,
+/// independent of the directory cache — covers manually appended mention
+/// open_ids that never appeared in any receipt or department pull.
+#[handler]
+pub async fn lookup_open_id<S: VulnService + Send + Sync + 'static>(
+    state: Data<&Ctx<S>>,
+    poem::web::Path(open_id): poem::web::Path<String>,
+) -> Result<Json<Value>, ApiError> {
+    let open_id = open_id.trim().to_owned();
+    if !open_id.starts_with("ou_") || open_id.len() > 100 {
+        return Err(ApiError::BadRequest("Open ID 无效（需 ou_ 开头）".into()));
+    }
+    let row = state
+        .db
+        .orm()
+        .query_one(Statement::from_string(
+            DatabaseBackend::Sqlite,
+            "SELECT app_id,app_secret FROM feishu_app WHERE enabled=1 ORDER BY id LIMIT 1",
+        ))
+        .await
+        .map_err(orm_error)?
+        .ok_or_else(|| ApiError::BadRequest("没有启用的飞书应用".into()))?;
+    let app_id: String = row.try_get("", "app_id").map_err(orm_error)?;
+    let app_secret: String = row.try_get("", "app_secret").map_err(orm_error)?;
+    let client = crate::output::push::feishu_app::FeishuApp::new(app_id, app_secret)
+        .map_err(|e| ApiError::InternalServerError(format!("飞书应用初始化失败：{e}")))?;
+    let (name, departments) = client
+        .user_info(&open_id)
+        .await
+        .map_err(|e| ApiError::BadRequest(format!("查询用户失败：{e}")))?;
+    if name.is_empty() {
+        return Err(ApiError::BadRequest(
+            "通讯录未返回该用户姓名（检查数据范围或 Open ID）".into(),
+        ));
+    }
+    Ok(Json(
+        json!({"open_id": open_id, "name": name, "departments": departments}),
+    ))
+}
+
 /// Distinct people seen in responses: the source for @ mention pickers.
 #[handler]
 pub async fn list_people<S: VulnService + Send + Sync + 'static>(

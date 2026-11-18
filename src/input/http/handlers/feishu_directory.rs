@@ -358,7 +358,8 @@ pub async fn list_members<S: VulnService + Send + Sync + 'static>(
         match result {
             Ok(members) => {
                 for (open_id, name) in members {
-                    seen.entry(open_id).or_insert_with(|| (name, department.clone()));
+                    seen.entry(open_id)
+                        .or_insert_with(|| (name, department.clone()));
                 }
             }
             Err(e) => {
@@ -367,7 +368,7 @@ pub async fn list_members<S: VulnService + Send + Sync + 'static>(
         }
     }
     let mut members: Vec<(String, (String, String))> = seen.into_iter().collect();
-    members.sort_by(|a, b| a.1 .0.cmp(&b.1 .0).then(a.0.cmp(&b.0)));
+    members.sort_by(|a, b| a.1.0.cmp(&b.1.0).then(a.0.cmp(&b.0)));
     members.truncate(DIRECTORY_MEMBERS_CAP);
     let data: Vec<JsonValue> = members
         .into_iter()
