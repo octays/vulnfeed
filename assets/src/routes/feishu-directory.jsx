@@ -107,16 +107,23 @@ export default function FeishuDirectory() {
       <p className="mt-1 text-xs text-gray-500">订阅：{c.stacks ? c.stacks.split(',').join('、') : '（全部）'}</p>
       <p className="text-xs text-gray-500">@ 提醒：{(c.mention_open_ids || '').split(',').filter(Boolean).map(id => personName(id) || id).join('、') || '（无）'}</p>
       <div className="flex flex-wrap gap-3 mt-1">
-        {people.map(p => (
-          <label key={p.open_id} className="inline-flex items-center gap-1 text-sm">
-            <input type="checkbox" checked={(c.mention_open_ids || '').split(',').filter(Boolean).includes(p.open_id)} onChange={e => run(async () => {
-              const cur = (c.mention_open_ids || '').split(',').filter(Boolean)
-              const next = e.target.checked ? [...cur, p.open_id] : cur.filter(id => id !== p.open_id)
-              await api.put(`/receipts/directory/chats/${c.id}`, { mention_open_ids: next.join(',') })
-            })} />
-            @{p.name}
-          </label>
-        ))}
+        {/* Checkboxes cover everyone already mentioned plus receipt submitters,
+            so dialog-added people can be unchecked like any other. */}
+        {(() => {
+          const mentioned = (c.mention_open_ids || '').split(',').filter(Boolean)
+          const extra = mentioned.filter(id => !people.some(p => p.open_id === id))
+            .map(id => ({ open_id: id, name: personName(id) || id }))
+          return [...people, ...extra].map(p => (
+            <label key={p.open_id} className="inline-flex items-center gap-1 text-sm">
+              <input type="checkbox" checked={mentioned.includes(p.open_id)} onChange={e => run(async () => {
+                const cur = (c.mention_open_ids || '').split(',').filter(Boolean)
+                const next = e.target.checked ? [...cur, p.open_id] : cur.filter(id => id !== p.open_id)
+                await api.put(`/receipts/directory/chats/${c.id}`, { mention_open_ids: next.join(',') })
+              })} />
+              @{p.name}
+            </label>
+          ))
+        })()}
         <button className={link + ' text-xs'} onClick={() => setMentionDraft({ chat: c, openId: '', resolved: null, query: '', error: '' })}>+ 添加人员</button>
       </div>
       <div className="flex flex-wrap gap-3 mt-1">
