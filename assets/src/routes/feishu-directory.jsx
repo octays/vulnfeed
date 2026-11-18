@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import api from '../lib/api'
 import PeoplePicker from '../components/PeoplePicker'
 
@@ -45,7 +45,30 @@ export default function FeishuDirectory() {
   useEffect(() => { refresh().catch(() => setError('获取飞书配置失败')) }, [])
   async function run(fn) { setBusy(true); setError(''); try { await fn(); await refresh() } catch (e) { setError(e.response?.data?.data?.message || e.response?.data?.message || '操作失败，请检查配置和日志') } finally { setBusy(false) } }
   const options = (rows, label) => rows.map(r => <option key={r.id} value={r.id}>{label(r)}</option>)
-  const personName = (openId) => contacts.find(p => p.open_id === (openId || '').trim())?.name
+  // IDs referenced by mentions/dimension owners but absent from both contacts
+  // sources (never submitted a receipt, not in the directory pull) are
+  // resolved on demand via the per-user contact API and cached for the session.
+  const [extraNames, setExtraNames] = useState({})
+  const requestedRef = useRef(new Set())
+  const allReferencedIds = useMemo(() => {
+    const ids = new Set()
+    for (const c of (data.chats || [])) (c.mention_open_ids || '').split(',').forEach(id => id.trim().startsWith('ou_') && ids.add(id.trim()))
+    for (const d of dims) if (d.owner_open_id) ids.add(d.owner_open_id.trim())
+    return [...ids]
+  }, [data.chats, dims])
+  useEffect(() => {
+    for (const id of allReferencedIds) {
+      if (contacts.some(p => p.open_id === id) || requestedRef.current.has(id)) continue
+      requestedRef.current.add(id)
+      api.get(`/receipts/people/${encodeURIComponent(id)}`)
+        .then(r => setExtraNames(prev => ({ ...prev, [id]: r.data.name || id })))
+        .catch(() => setExtraNames(prev => ({ ...prev, [id]: id })))
+    }
+  }, [allReferencedIds, contacts])
+  const personName = (openId) => {
+    const id = (openId || '').trim()
+    return contacts.find(p => p.open_id === id)?.name || extraNames[id]
+  }
   const [mentionDraft, setMentionDraft] = useState(null)
   async function resolveOpenId(value) {
     const openId = (value || '').trim()
