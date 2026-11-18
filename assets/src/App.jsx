@@ -5,6 +5,7 @@ import VulnerabilityListPage from './routes/vuln/list'
 import VulnerabilityDetailPage from './routes/vuln/detail'
 import SyncDataTaskPage from './routes/sync/task'
 import StacksPage from './routes/stacks'
+import SopPage from './routes/sop'
 import PluginListPage from './routes/plugins/list'
 import SecNoticeListPage from './routes/secnotice/list'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -58,6 +59,10 @@ function App() {
         <Route
           path="/stacks"
           element={<ProtectedRoute><Layout><StacksPage /></Layout></ProtectedRoute>}
+        />
+        <Route
+          path="/sop"
+          element={<ProtectedRoute><Layout><SopPage /></Layout></ProtectedRoute>}
         />
         <Route
           path="/plugins"
