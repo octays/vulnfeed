@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import api, { getSyncDataTask, createOrUpdateSyncDataTask, runSyncDataTaskNow } from '../../lib/api'
 import FeishuDirectory from '../feishu-directory'
 import PeoplePicker from '../../components/PeoplePicker'
@@ -145,7 +145,25 @@ const SyncDataTaskPage = () => {
       .reverse()
       .reduce((acc, c) => { if (c.open_id) acc[c.open_id] = c; return acc }, {}),
   )
-  const escalateName = escalateOpenId ? contacts.find(p => p.open_id === escalateOpenId)?.name : null
+  // People the directory pull misses (no department / stale cache) resolve on
+  // demand so both the display and the PeoplePicker search can find them.
+  const [extraName, setExtraName] = useState(null)
+  const extraRequested = useRef(false)
+  useEffect(() => {
+    if (!escalateOpenId || extraRequested.current) return
+    if (contacts.some(p => p.open_id === escalateOpenId)) return
+    extraRequested.current = true
+    api.get(`/receipts/people/${encodeURIComponent(escalateOpenId)}`)
+      .then(r => setExtraName({ open_id: escalateOpenId, name: r.data.name || '' }))
+      .catch(() => {})
+  }, [escalateOpenId, contacts])
+  const searchableContacts = useMemo(() => (
+    extraName && extraName.name && !contacts.some(p => p.open_id === extraName.open_id)
+      ? [...contacts, extraName] : contacts
+  ), [contacts, extraName])
+  const escalateName = escalateOpenId
+    ? (searchableContacts.find(p => p.open_id === escalateOpenId)?.name ?? escalateOpenId)
+    : null
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -201,7 +219,7 @@ const SyncDataTaskPage = () => {
               <div className="mt-3 p-3 rounded-lg border border-gray-200 bg-gray-50/60">
                 <span className="block text-sm font-medium text-gray-700">催办升级提醒人</span>
                 <div className="mt-1">
-                  <PeoplePicker contacts={contacts} value={{ open_id: task.remind_escalate_open_id, name: escalateName || '' }}
+                  <PeoplePicker contacts={searchableContacts} value={{ open_id: task.remind_escalate_open_id, name: escalateName || '' }}
                     onChange={picked => setTask(prev => ({ ...prev, remind_escalate_open_id: picked.open_id }))}
                     placeholder="搜索姓名 / 部门并选择（第 3 次催办起通知，留空不升级）" />
                 </div>

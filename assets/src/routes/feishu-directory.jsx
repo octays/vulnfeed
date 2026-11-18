@@ -41,6 +41,15 @@ export default function FeishuDirectory() {
       .reverse()
       .reduce((acc, c) => { if (c.open_id) acc[c.open_id] = c; return acc }, {}),
   ).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh'))
+  // Lazily resolved names (server lookup) become first-class contact entries
+  // so they also appear in PeoplePicker's name search, not just display lines.
+  const [extraNames, setExtraNames] = useState({})
+  const searchableContacts = useMemo(() => {
+    const extras = Object.entries(extraNames)
+      .filter(([id, name]) => name && !contacts.some(c => c.open_id === id))
+      .map(([open_id, name]) => ({ open_id, name, department: '' }))
+    return extras.length ? [...contacts, ...extras] : contacts
+  }, [contacts, extraNames])
   useEffect(() => { api.get('/tech_stacks').then(r => setStacks((r.data.data || []).filter(t => t.enabled))).catch(() => {}) }, [])
   useEffect(() => { refresh().catch(() => setError('获取飞书配置失败')) }, [])
   async function run(fn) { setBusy(true); setError(''); try { await fn(); await refresh() } catch (e) { setError(e.response?.data?.data?.message || e.response?.data?.message || '操作失败，请检查配置和日志') } finally { setBusy(false) } }
@@ -48,7 +57,6 @@ export default function FeishuDirectory() {
   // IDs referenced by mentions/dimension owners but absent from both contacts
   // sources (never submitted a receipt, not in the directory pull) are
   // resolved on demand via the per-user contact API and cached for the session.
-  const [extraNames, setExtraNames] = useState({})
   const requestedRef = useRef(new Set())
   const allReferencedIds = useMemo(() => {
     const ids = new Set()
@@ -136,7 +144,7 @@ export default function FeishuDirectory() {
             <div className="text-xs text-gray-600">
               负责人（催办私发对象）
               <div className="mt-1">
-                <PeoplePicker contacts={contacts} value={{ open_id: draft.owner_open_id, name: draft.owner_name }}
+                <PeoplePicker contacts={searchableContacts} value={{ open_id: draft.owner_open_id, name: draft.owner_name }}
                   onChange={picked => setDimDraft({ ...draft, owner_open_id: picked.open_id, owner_name: picked.name })} />
               </div>
               {!draft.owner_open_id.trim() && <p className="mt-1 text-amber-600">未选择负责人：催办将走群 @</p>}
