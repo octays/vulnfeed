@@ -242,7 +242,7 @@ pub async fn respond_from_group(
         ))
         .await?;
     }
-    let row=tx.query_one(statement("SELECT t.status,t.version FROM receipt_delivery d JOIN receipt_task t ON t.id=d.task_id AND t.case_id=d.case_id JOIN receipt_case rc ON rc.id=t.case_id AND rc.status='open' JOIN feishu_app app ON app.app_id=d.app_id AND app.tenant_key=d.tenant_key AND app.enabled=1 JOIN feishu_chat chat ON chat.app_id=app.id AND chat.chat_id=d.chat_id AND chat.enabled=1 WHERE t.id=? AND d.app_id=? AND d.tenant_key=? AND d.chat_id=? AND d.message_id=? AND d.withdrawn=0",vec![task_id.into(),app_id.into(),tenant.into(),chat.into(),message.into()])).await?.ok_or(ReceiptError::Unauthorized)?;
+    let row=tx.query_one(statement("SELECT t.status,t.version FROM receipt_delivery d JOIN receipt_task t ON t.id=d.task_id AND t.case_id=d.case_id JOIN receipt_case rc ON rc.id=t.case_id AND rc.status='open' JOIN feishu_app app ON app.app_id=d.app_id AND app.tenant_key=d.tenant_key AND app.enabled=1 JOIN feishu_chat chat ON chat.app_id=app.id AND chat.chat_id=d.chat_id WHERE t.id=? AND d.app_id=? AND d.tenant_key=? AND d.chat_id=? AND d.message_id=? AND d.withdrawn=0",vec![task_id.into(),app_id.into(),tenant.into(),chat.into(),message.into()])).await?.ok_or(ReceiptError::Unauthorized)?;
     let prior=tx.query_one(statement("SELECT task_id,operator_open_id,new_status,details FROM receipt_event WHERE app_id=? AND event_id=?",vec![app_id.into(),event_id.into()])).await?;
     if let Some(event) = prior {
         if event.try_get::<i64>("", "task_id")? == task_id
@@ -320,7 +320,7 @@ pub async fn delete_own_response(
         return Err(ReceiptError::DeletionDisabled);
     }
     let tx = crate::output::db::sqlite::begin_write(db).await?;
-    let row = tx.query_one(statement("SELECT t.status FROM receipt_delivery d JOIN receipt_task t ON t.id=d.task_id AND t.case_id=d.case_id JOIN receipt_case rc ON rc.id=t.case_id AND rc.status='open' JOIN feishu_app app ON app.app_id=d.app_id AND app.tenant_key=d.tenant_key AND app.enabled=1 JOIN feishu_chat chat ON chat.app_id=app.id AND chat.chat_id=d.chat_id AND chat.enabled=1 WHERE t.id=? AND d.app_id=? AND d.tenant_key=? AND d.chat_id=? AND d.message_id=? AND d.withdrawn=0",vec![task_id.into(),app_id.into(),tenant.into(),chat.into(),message.into()])).await?.ok_or(ReceiptError::Unauthorized)?;
+    let row = tx.query_one(statement("SELECT t.status FROM receipt_delivery d JOIN receipt_task t ON t.id=d.task_id AND t.case_id=d.case_id JOIN receipt_case rc ON rc.id=t.case_id AND rc.status='open' JOIN feishu_app app ON app.app_id=d.app_id AND app.tenant_key=d.tenant_key AND app.enabled=1 JOIN feishu_chat chat ON chat.app_id=app.id AND chat.chat_id=d.chat_id WHERE t.id=? AND d.app_id=? AND d.tenant_key=? AND d.chat_id=? AND d.message_id=? AND d.withdrawn=0",vec![task_id.into(),app_id.into(),tenant.into(),chat.into(),message.into()])).await?.ok_or(ReceiptError::Unauthorized)?;
     let previous: String = row.try_get("", "status")?;
     let prior = tx
         .query_one(statement(
