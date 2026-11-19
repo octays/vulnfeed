@@ -105,6 +105,7 @@ pub async fn card_action<S: VulnService + Send + Sync + 'static>(
             | ReceiptError::Duplicate
             | ReceiptError::AlreadyOpen(_)
             | ReceiptError::Invalid
+            | ReceiptError::InvalidForm(_)
             | ReceiptError::TaskClosed
             | ReceiptError::NoPending
             | ReceiptError::NoChats

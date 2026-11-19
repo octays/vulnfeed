@@ -267,6 +267,7 @@ pub struct CloseRequest {
 fn receipt_error(e: ReceiptError) -> ApiError {
     match e {
         ReceiptError::Invalid
+        | ReceiptError::InvalidForm(_)
         | ReceiptError::Conflict
         | ReceiptError::TaskClosed
         | ReceiptError::NoPending

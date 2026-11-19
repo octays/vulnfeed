@@ -9,6 +9,10 @@ pub enum ReceiptError {
     Orm(#[from] sea_orm::DbErr),
     #[error("提交内容无效：请选择维度与五选一选项，并按选项规则选择处置负责人")]
     Invalid,
+    /// Field-level form validation failure; carries the reason so the card
+    /// toast can name the actual problem instead of the generic text above.
+    #[error("提交内容无效：{0}")]
+    InvalidForm(String),
     #[error("已有进行中的确认单 #{0}，所选团队与原确认单不同；请查看原确认单")]
     AlreadyOpen(i64),
     #[error("receipt task not found or not authorized")]
@@ -177,6 +181,47 @@ async fn create_case_inner(
     Ok((id, true))
 }
 
+/// Field-level checks on a card answer (dimension picked, five-option valid,
+/// owner count matching the option) so the toast names the actual problem.
+/// none needs no owner; ops/iter pick exactly one; both/special multi-select.
+fn validate_answer(dimension: &str, status: &str, owners: &[String]) -> Result<(), ReceiptError> {
+    if dimension.trim().is_empty() {
+        return Err(ReceiptError::InvalidForm("请选择回执维度".into()));
+    }
+    if !is_receipt_status(status) {
+        return Err(ReceiptError::InvalidForm(
+            "五选一选项无效或为旧版选项，请等待卡片刷新后重新提交".into(),
+        ));
+    }
+    if owners.len() > 5
+        || owners
+            .iter()
+            .any(|owner| !owner.starts_with("ou_") || owner.len() > 64)
+    {
+        return Err(ReceiptError::InvalidForm(
+            "处置负责人选择无效（需为飞书通讯录用户，最多 5 名），请重新选择".into(),
+        ));
+    }
+    match (status, owners.len()) {
+        ("none", 0) | ("ops" | "iter", 1) | ("both" | "special", 1..=5) => Ok(()),
+        ("none", _) => Err(ReceiptError::InvalidForm(
+            "「无影响，无需处置流程」不需要选择处置负责人".into(),
+        )),
+        ("ops" | "iter", 0) => Err(ReceiptError::InvalidForm(format!(
+            "「{}」需选择 1 名处置负责人",
+            status_label(status)
+        ))),
+        ("ops" | "iter", _) => Err(ReceiptError::InvalidForm(format!(
+            "「{}」只能选择 1 名处置负责人，多人处置请改选运维+迭代或专项处理",
+            status_label(status)
+        ))),
+        _ => Err(ReceiptError::InvalidForm(format!(
+            "「{}」需选择 1-5 名处置负责人",
+            status_label(status)
+        ))),
+    }
+}
+
 /// Save the authenticated operator's answer for one dimension. Each dimension
 /// keeps a single latest answer (回执确认只需一次，可覆盖变更)； owners are the
 /// 处置负责人 picked from the Feishu directory, recorded for traceability.
@@ -197,19 +242,10 @@ pub async fn respond_from_group(
     if [app_id, tenant, chat, message, open_id, event_id]
         .iter()
         .any(|v| v.trim().is_empty())
-        || !is_receipt_status(status)
-        || owners.len() > 5
-        || owners
-            .iter()
-            .any(|owner| !owner.starts_with("ou_") || owner.len() > 64)
-        // none needs no owner; ops/iter pick exactly one; both/special multi-select.
-        || !matches!(
-            (status, owners.len()),
-            ("none", 0) | ("ops" | "iter", 1) | ("both" | "special", 1..=5)
-        )
     {
         return Err(ReceiptError::Invalid);
     }
+    validate_answer(dimension, status, owners)?;
     // Canonical storage: [{"open_id":"ou_..","name":""}]; the name-lookup
     // loop fills the names asynchronously.
     let owners_json = serde_json::to_string(
@@ -227,7 +263,9 @@ pub async fn respond_from_group(
         ))
         .await?;
     if dimension_row.is_none() {
-        return Err(ReceiptError::Invalid);
+        return Err(ReceiptError::InvalidForm(
+            "回执维度无效或已停用，请等待卡片刷新后重新提交".into(),
+        ));
     }
     let bound=tx.execute(statement("UPDATE feishu_app SET tenant_key=? WHERE app_id=? AND tenant_key='' AND EXISTS(SELECT 1 FROM receipt_delivery WHERE task_id=? AND app_id=? AND tenant_key='' AND chat_id=? AND message_id=?)",vec![tenant.into(),app_id.into(),task_id.into(),app_id.into(),chat.into(),message.into()])).await?;
     if bound.rows_affected() == 1 {

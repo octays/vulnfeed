@@ -1019,8 +1019,11 @@ mod tests {
             let event_id = format!("invalid-{dimension}-{status}");
             let bad = dimension_callback("bob", "chat", &event_id, dimension, status, owners);
             assert!(
-                matches!(handle_action(&orm, bad).await, Err(ReceiptError::Invalid)),
-                "expected Invalid for {dimension}/{status}"
+                matches!(
+                    handle_action(&orm, bad).await,
+                    Err(ReceiptError::InvalidForm(_))
+                ),
+                "expected InvalidForm for {dimension}/{status}"
             );
         }
         sqlx::query("UPDATE receipt_delivery SET withdrawn=1 WHERE id=1")
