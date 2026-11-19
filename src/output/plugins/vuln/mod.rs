@@ -1,8 +1,8 @@
 pub mod avd;
+pub mod chaitin;
 pub mod kev;
 pub mod oscs;
 pub mod seekbug;
-pub mod threatbook;
 pub mod ti;
 pub mod wiz;
 
@@ -16,8 +16,8 @@ use crate::{
     AppResult,
     domain::models::vuln_information::CreateVulnInformation,
     output::plugins::vuln::{
-        avd::AVDPlugin, kev::KevPlugin, oscs::OscsPlugin, seekbug::SeekBugPlugin,
-        threatbook::ThreatBookPlugin, ti::TiPlugin, wiz::WizPlugin,
+        avd::AVDPlugin, chaitin::ChaitinPlugin, kev::KevPlugin, oscs::OscsPlugin,
+        seekbug::SeekBugPlugin, ti::TiPlugin, wiz::WizPlugin,
     },
 };
 
@@ -30,7 +30,7 @@ pub fn init(sender: UnboundedSender<CreateVulnInformation>) -> AppResult<()> {
     AVDPlugin::try_new(sender.clone())?;
     OscsPlugin::try_new(sender.clone())?;
     SeekBugPlugin::try_new(sender.clone())?;
-    ThreatBookPlugin::try_new(sender.clone())?;
+    ChaitinPlugin::try_new(sender.clone())?;
     TiPlugin::try_new(sender.clone())?;
     WizPlugin::try_new(sender)?;
     Ok(())

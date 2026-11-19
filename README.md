@@ -13,7 +13,7 @@ VulnFeed 是一个用于收集和推送高价值漏洞和补丁公告信息的�
 | 知道创宇Seebug漏洞库 | <https://www.seebug.org/>                                      | 等级为高危或严重                                                             |
 | CISA KEV             | <https://www.cisa.gov/known-exploited-vulnerabilities-catalog> | 全部推送                                                                     |
 | 奇安信威胁情报中心   | <https://ti.qianxin.com/>                                      | 等级为高危严重**并且**包含 `奇安信CERT验证` `POC公开` `技术细节公布`标签之一 |
-| 微步在线             | <https://x.threatbook.com/v5/vulIntelligence>                  | 等级为高危或严重                                                             |
+| 长亭漏洞库            | <https://stack.chaitin.com/vuldb/index>                        | 收录的应急漏洞全部推送                                                       |
 
 当抓取安全补丁公告的站点数据：
 
