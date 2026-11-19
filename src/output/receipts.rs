@@ -74,20 +74,22 @@ fn statement(sql: &str, values: Vec<Value>) -> Statement {
 }
 
 /// Create a case only for a newly inserted source record published within the
-/// freshness window (local date >= yesterday).
+/// freshness window (local date >= yesterday). Vulns and notices have separate
+/// opt-in switches (`auto_receipts` / `auto_receipts_notice`).
 pub async fn auto_create(
     db: &DatabaseConnection,
     source_type: &str,
     source_id: i64,
     date: &str,
 ) -> Result<Option<i64>, ReceiptError> {
+    let flag_sql = match source_type {
+        "notice" => "SELECT auto_receipts_notice AS enabled FROM sync_task ORDER BY id LIMIT 1",
+        _ => "SELECT auto_receipts AS enabled FROM sync_task ORDER BY id LIMIT 1",
+    };
     let enabled = db
-        .query_one(statement(
-            "SELECT auto_receipts FROM sync_task ORDER BY id LIMIT 1",
-            vec![],
-        ))
+        .query_one(statement(flag_sql, vec![]))
         .await?
-        .map(|row| row.try_get::<bool>("", "auto_receipts"))
+        .map(|row| row.try_get::<bool>("", "enabled"))
         .transpose()?;
     if enabled != Some(true) {
         log::debug!("auto receipts disabled on the sync task; skip {source_type} #{source_id}");
@@ -623,6 +625,40 @@ mod tests {
                 .await
                 .unwrap();
         assert_eq!(queued, 2);
+    }
+
+    #[tokio::test]
+    async fn notice_cases_need_their_own_switch() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::migrate!("./migrations").run(&pool).await.unwrap();
+        let orm = sea_orm::SqlxSqliteConnector::from_sqlx_sqlite_pool(pool.clone());
+        // Vuln receipts on, notice receipts off (the shipped default).
+        sqlx::query("INSERT INTO sync_task(name,interval_minutes,status,auto_receipts) VALUES('sync',15,1,1)")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO security_notice(key,title) VALUES('n1','t')")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let today = chrono::Local::now().date_naive().to_string();
+        assert_eq!(
+            auto_create(&orm, "notice", 1, &today).await.unwrap(),
+            None,
+            "公告自动确认默认关"
+        );
+        sqlx::query("UPDATE sync_task SET auto_receipts_notice=1")
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            auto_create(&orm, "notice", 1, &today).await.unwrap(),
+            Some(1)
+        );
     }
 
     #[tokio::test]

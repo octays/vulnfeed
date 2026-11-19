@@ -75,6 +75,7 @@ const SyncDataTaskPage = () => {
           skip_tls_verify: data.skip_tls_verify,
           push_history: data.push_history,
           auto_receipts: data.auto_receipts,
+          auto_receipts_notice: !!data.auto_receipts_notice,
           auto_remind: !!data.auto_remind,
           allow_response_deletion: !!data.allow_response_deletion,
           remind_escalate_open_id: data.remind_escalate_open_id || '',
@@ -86,6 +87,7 @@ const SyncDataTaskPage = () => {
           skip_tls_verify: data.skip_tls_verify,
           push_history: data.push_history,
           auto_receipts: data.auto_receipts,
+          auto_receipts_notice: !!data.auto_receipts_notice,
           auto_remind: !!data.auto_remind,
           allow_response_deletion: !!data.allow_response_deletion,
           remind_escalate_open_id: data.remind_escalate_open_id || '',
@@ -212,8 +214,9 @@ const SyncDataTaskPage = () => {
           <form onSubmit={handleSubmit}>
             <Section title="自动确认与催办" description="确认单的发起时机与催办策略">
               <div className="-mx-3 space-y-1">
-                <Toggle id="auto_receipts" label="自动发起影响确认" hint="新入库且披露日期在 48 小时内（昨天及以后）的数据自动创建确认单并发送飞书卡片；历史数据不自动发起。" checked={task.auto_receipts} onChange={handleChange} />
-                <Toggle id="auto_remind" label="自动催办未回执维度" hint="每 24 小时私发催办一次给未回执维度的负责人，次数不设上限；第 3 次起追加通知下方升级提醒人。" checked={task.auto_remind} onChange={handleChange} />
+                <Toggle id="auto_receipts" label="漏洞自动发起影响确认" hint="新入库且披露日期在 48 小时内（昨天及以后）的漏洞自动创建确认单并发送飞书卡片；历史数据不自动发起。" checked={task.auto_receipts} onChange={handleChange} />
+                <Toggle id="auto_receipts_notice" label="安全公告自动发起影响确认" hint="厂商补丁公告自动创建确认单。公告是否相关已由技术栈订阅过滤，默认关闭；需要全员确认的大公告可手动发起。" checked={task.auto_receipts_notice} onChange={handleChange} />
+                <Toggle id="auto_remind" label="自动催办未回执维度" hint="每 24 小时私发催办一次给未回执维度的负责人，仅催 7 天内的新单；第 3 次起追加通知下方升级提醒人。" checked={task.auto_remind} onChange={handleChange} />
                 <Toggle id="allow_response_deletion" label="允许填写人删除自己的回执" hint="开启后确认卡片显示「删除我的回执」按钮（软删除并保留审计）；关闭则只能再次提交覆盖。" checked={task.allow_response_deletion} onChange={handleChange} />
               </div>
               <div className="mt-3 p-3 rounded-lg border border-gray-200 bg-gray-50/60">

@@ -30,6 +30,8 @@ pub struct CreateSyncDataTaskHttpRequestBody {
     #[serde(default)]
     pub auto_receipts: bool,
     #[serde(default)]
+    pub auto_receipts_notice: bool,
+    #[serde(default)]
     pub auto_remind: bool,
     #[serde(default)]
     pub allow_response_deletion: bool,
@@ -51,6 +53,7 @@ impl CreateSyncDataTaskHttpRequestBody {
             skip_tls_verify: self.skip_tls_verify,
             push_history: self.push_history,
             auto_receipts: self.auto_receipts,
+            auto_receipts_notice: self.auto_receipts_notice,
             auto_remind: self.auto_remind,
             allow_response_deletion: self.allow_response_deletion,
             remind_escalate_open_id: self.remind_escalate_open_id,
@@ -113,6 +116,7 @@ pub struct GetSyncDataTaskHttpResponseData {
     pub skip_tls_verify: bool,
     pub push_history: bool,
     pub auto_receipts: bool,
+    pub auto_receipts_notice: bool,
     pub auto_remind: bool,
     pub allow_response_deletion: bool,
     pub remind_escalate_open_id: String,
@@ -128,6 +132,7 @@ impl From<SyncDataTask> for GetSyncDataTaskHttpResponseData {
             skip_tls_verify: sync_data_task.skip_tls_verify,
             push_history: sync_data_task.push_history,
             auto_receipts: sync_data_task.auto_receipts,
+            auto_receipts_notice: sync_data_task.auto_receipts_notice,
             auto_remind: sync_data_task.auto_remind,
             allow_response_deletion: sync_data_task.allow_response_deletion,
             remind_escalate_open_id: sync_data_task.remind_escalate_open_id,
