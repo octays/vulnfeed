@@ -259,6 +259,18 @@ impl<D: Dao> DaoQueryBuilder<D> {
         self
     }
 
+    pub fn order_by_asc(mut self, column: &str) -> Self {
+        self.query
+            .order_by(Alias::new(column), sea_query::Order::Asc);
+        self
+    }
+
+    /// Order by an arbitrary expression, e.g. emptiness-aware date sorting.
+    pub fn order_by_expr(mut self, expr: sea_query::SimpleExpr, order: sea_query::Order) -> Self {
+        self.query.order_by_expr(expr, order);
+        self
+    }
+
     pub fn limit_offset(mut self, limit: i64, offset: i64) -> Self {
         self.query.limit(limit as u64).offset(offset as u64);
         self

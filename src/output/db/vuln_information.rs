@@ -213,8 +213,24 @@ impl VulnInformationDao {
         let page_no = *page_filter.page_no().as_ref();
         let page_size = *page_filter.page_size().as_ref();
         let offset = (page_no - 1) * page_size;
+        // Disclosure is a free-text date column; rows without one sink to the
+        // end instead of polluting the top of a "newest first" list.
+        let query_builder = match search_params.sort.as_deref() {
+            Some("disclosure_desc") => query_builder
+                .order_by_expr(
+                    sea_query::Expr::col(sea_query::Alias::new("disclosure")).eq(""),
+                    sea_query::Order::Asc,
+                )
+                .order_by_desc("disclosure"),
+            Some("disclosure_asc") => query_builder
+                .order_by_expr(
+                    sea_query::Expr::col(sea_query::Alias::new("disclosure")).eq(""),
+                    sea_query::Order::Asc,
+                )
+                .order_by_asc("disclosure"),
+            _ => query_builder.order_by_desc("updated_at"),
+        };
         query_builder
-            .order_by_desc("updated_at")
             .limit_offset(page_size as i64, offset as i64)
             .fetch_all(tx)
             .await
@@ -350,6 +366,60 @@ mod tests {
         assert!(n1);
         assert!(!n2, "同 key 重同步不应视为新");
         assert_eq!(id1, id2);
+        tx.commit().await.expect("commit");
+    }
+
+    #[tokio::test]
+    async fn list_sorts_by_disclosure_with_empty_sinking_last() {
+        let pool = setup().await;
+        let orm = sea_orm::SqlxSqliteConnector::from_sqlx_sqlite_pool(pool.clone());
+        let mut tx = sea_orm::TransactionTrait::begin(&orm)
+            .await
+            .expect("begin tx");
+        for (key, disclosure) in [
+            ("k-old", "2026-01-02"),
+            ("k-empty", ""),
+            ("k-new", "2026-11-18"),
+        ] {
+            let mut req = make_req(key, "", "High", &[]);
+            req.disclosure = disclosure.to_string();
+            VulnInformationDao::create_or_update(&mut tx, req)
+                .await
+                .expect("create");
+        }
+        let page = crate::domain::models::page_utils::PageFilter::new(
+            crate::domain::models::page_utils::PageNo::try_new(1).unwrap(),
+            crate::domain::models::page_utils::PageSize::try_new(10).unwrap(),
+        );
+        let keys = |sort: Option<&str>| {
+            SearchParams::new()
+                .with_sort(sort.map(str::to_string))
+                .clone()
+        };
+        let desc = VulnInformationDao::filter_vulnfusion_information(
+            &mut tx,
+            &page,
+            &keys(Some("disclosure_desc")),
+        )
+        .await
+        .expect("desc filter");
+        assert_eq!(
+            desc.iter().map(|v| v.key.as_str()).collect::<Vec<_>>(),
+            vec!["k-new", "k-old", "k-empty"],
+            "降序按披露时间,空披露沉底"
+        );
+        let asc = VulnInformationDao::filter_vulnfusion_information(
+            &mut tx,
+            &page,
+            &keys(Some("disclosure_asc")),
+        )
+        .await
+        .expect("asc filter");
+        assert_eq!(
+            asc.iter().map(|v| v.key.as_str()).collect::<Vec<_>>(),
+            vec!["k-old", "k-new", "k-empty"],
+            "升序按披露时间,空披露仍在最后"
+        );
         tx.commit().await.expect("commit");
     }
 }

@@ -87,6 +87,8 @@ pub struct SearchParams {
     pub title: Option<String>,
     pub pushed: Option<bool>,
     pub source_name: Option<String>,
+    /// List ordering: "updated" (default) | "disclosure_desc" | "disclosure_asc".
+    pub sort: Option<String>,
 }
 
 impl SearchParams {
@@ -108,6 +110,10 @@ impl SearchParams {
     }
     pub fn with_source_name(mut self, source_name: Option<String>) -> Self {
         self.source_name = source_name;
+        self
+    }
+    pub fn with_sort(mut self, sort: Option<String>) -> Self {
+        self.sort = sort;
         self
     }
 }

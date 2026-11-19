@@ -30,6 +30,7 @@ pub struct ListVulnInformationRequestBody {
     pub title: Option<String>,
     pub pushed: Option<bool>,
     pub source_name: Option<String>,
+    pub sort: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -44,11 +45,20 @@ impl ListVulnInformationRequestBody {
         let page_no = PageNo::try_new(self.page_no)?;
         let page_size = PageSize::try_new(self.page_size)?;
         let page_filter = PageFilter::new(page_no, page_size);
+        const SORT_KEYS: [&str; 3] = ["updated", "disclosure_desc", "disclosure_asc"];
+        if let Some(sort) = &self.sort
+            && !SORT_KEYS.contains(&sort.as_str())
+        {
+            return Err(ParseListVulnInformationRequestBodyError::InvalidSort(
+                sort.clone(),
+            ));
+        }
         let search_params = SearchParams::new()
             .with_cve(self.cve)
             .with_pushed(self.pushed)
             .with_source_name(self.source_name)
-            .with_title(self.title);
+            .with_title(self.title)
+            .with_sort(self.sort);
         Ok(ListVulnInformationRequest::new(page_filter, search_params))
     }
 }
@@ -111,6 +121,8 @@ pub enum ParseListVulnInformationRequestBodyError {
     InvalidPageNo(#[from] PageNoError),
     #[error(transparent)]
     InvalidPageSize(#[from] PageSizeError),
+    #[error("invalid sort key: {0}")]
+    InvalidSort(String),
 }
 
 impl From<ParseListVulnInformationRequestBodyError> for ApiError {
@@ -121,6 +133,9 @@ impl From<ParseListVulnInformationRequestBodyError> for ApiError {
             }
             ParseListVulnInformationRequestBodyError::InvalidPageSize(e) => {
                 format!("Invalid page size: {}", e)
+            }
+            ParseListVulnInformationRequestBodyError::InvalidSort(sort) => {
+                format!("Invalid sort key: {sort}")
             }
         };
         ApiError::UnprocessableEntity(msg)

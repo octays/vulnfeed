@@ -57,6 +57,7 @@ export const getVulnerabilities = (params) => {
             title: params.title,
             pushed: params.pushed,
             source_name: params.source_name,
+            sort: params.sort,
         },
     })
 }

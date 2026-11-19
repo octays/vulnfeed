@@ -20,6 +20,8 @@ const VulnerabilityListPage = () => {
     title: '',
     source_name: ''  // 存储插件的name字段
   })
+  // 排序方式: '' = 更新时间(默认), disclosure_desc/asc = 披露时间
+  const [sort, setSort] = useState('')
 
   const fetchPlugins = async () => {
     try {
@@ -36,7 +38,7 @@ const VulnerabilityListPage = () => {
 
   useEffect(() => {
     fetchVulnerabilities()
-  }, [pageNo, filters])
+  }, [pageNo, filters, sort])
 
 
   const fetchVulnerabilities = async (silent = false) => {
@@ -47,6 +49,7 @@ const VulnerabilityListPage = () => {
       const params = {
         pageNo,
         pageSize,
+        sort: sort || undefined,
         ...filters
       }
       // 清理空值参数
@@ -87,6 +90,12 @@ const handleSourceFilterChange = (e) => {
     ...prev,
     source_name: selectedName
   }))
+  // 重置页码到第一页
+  setPageNo(1)
+}
+
+const handleSortChange = (e) => {
+  setSort(e.target.value)
   // 重置页码到第一页
   setPageNo(1)
 }
@@ -166,7 +175,23 @@ const handleSourceFilterChange = (e) => {
               ))}
             </select>
           </div>
-        </div>
+          </div>
+          <div>
+            <label htmlFor="sort" className="block text-sm font-medium text-gray-700">
+              排序方式
+            </label>
+            <select
+              name="sort"
+              id="sort"
+              value={sort}
+              onChange={handleSortChange}
+              className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm appearance-none focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+            >
+              <option value="">更新时间（默认）</option>
+              <option value="disclosure_desc">披露时间 新→旧</option>
+              <option value="disclosure_asc">披露时间 旧→新</option>
+            </select>
+          </div>
         </div>
         <div className="flex justify-end mt-4">
           <button
@@ -245,6 +270,11 @@ const handleSourceFilterChange = (e) => {
                               minute: '2-digit'
                             })}</time>
                           </p>
+                          {vuln.disclosure && (
+                            <p className="mt-1 sm:ml-6">
+                              披露时间: <span>{vuln.disclosure}</span>
+                            </p>
+                          )}
                           <ReceiptBadge receipt={vuln.receipt} />
                           {(vuln.stacks || '').split(',').filter(Boolean).map(slug => <span key={slug} className="ml-1 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700">{slug}</span>)}
                           <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (vuln.receipt) setReceiptCase(vuln.receipt.case_id); else window.alert('该漏洞尚未发起影响确认。') }} className="ml-2 inline-flex items-center px-2.5 py-0.5 border border-emerald-300 rounded-full text-xs font-medium text-emerald-700 bg-white hover:bg-emerald-50">查看确认</button>
