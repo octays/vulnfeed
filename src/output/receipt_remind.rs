@@ -6,6 +6,10 @@ use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement};
 /// Nudge at most once per 24h; SOP v24: no reminder-count cap, and from the
 /// 3rd reminder on the escalation target is @-ed as well.
 const REMIND_INTERVAL_SECS: i64 = 24 * 3600;
+/// Auto-reminders only cover cases opened within the last 7 days — with no
+/// count cap an ever-growing backlog of open cases would spam owners forever.
+/// Manual nudges (admin button) are not subject to this window.
+const REMIND_MAX_AGE_SECS: i64 = 7 * 24 * 3600;
 /// remind_count recorded before the 3rd send.
 const ESCALATE_FROM_COUNT: i64 = 2;
 /// Scan cadence for the background loop.
@@ -222,13 +226,20 @@ pub async fn run(db: Db) {
 }
 
 /// Open tasks with pending dimensions whose 24h interval allows another nudge.
+/// Cases older than the 7-day window drop out: no infinite nagging on a
+/// growing backlog.
 async fn due_tasks(db: &DatabaseConnection) -> Result<Vec<i64>, sea_orm::DbErr> {
     let now = chrono::Utc::now().timestamp();
+    // receipt_case.created_at is UTC "YYYY-MM-DD HH:MM:SS" (CURRENT_TIMESTAMP).
+    let min_created_at = (chrono::DateTime::from_timestamp(now - REMIND_MAX_AGE_SECS, 0))
+        .unwrap_or_else(chrono::Utc::now)
+        .format("%Y-%m-%d %H:%M:%S")
+        .to_string();
     let rows = db
         .query_all(Statement::from_sql_and_values(
             DatabaseBackend::Sqlite,
-            "SELECT t.id FROM receipt_task t JOIN receipt_case c ON c.id=t.case_id AND c.status='open' WHERE EXISTS(SELECT 1 FROM sync_task s WHERE s.auto_remind=1) AND t.last_reminded_at<=? AND EXISTS(SELECT 1 FROM receipt_dimension d WHERE d.enabled=1 AND NOT EXISTS(SELECT 1 FROM receipt_response r WHERE r.task_id=t.id AND r.deleted=0 AND r.dimension=d.slug AND r.status IN ('none','ops','iter','both','special'))) ORDER BY t.id LIMIT 20",
-            [(now - REMIND_INTERVAL_SECS).into()],
+            "SELECT t.id FROM receipt_task t JOIN receipt_case c ON c.id=t.case_id AND c.status='open' AND c.created_at>=? WHERE EXISTS(SELECT 1 FROM sync_task s WHERE s.auto_remind=1) AND t.last_reminded_at<=? AND EXISTS(SELECT 1 FROM receipt_dimension d WHERE d.enabled=1 AND NOT EXISTS(SELECT 1 FROM receipt_response r WHERE r.task_id=t.id AND r.deleted=0 AND r.dimension=d.slug AND r.status IN ('none','ops','iter','both','special'))) ORDER BY t.id LIMIT 20",
+            [min_created_at.into(), (now - REMIND_INTERVAL_SECS).into()],
         ))
         .await?;
     rows.iter()
@@ -322,6 +333,25 @@ mod tests {
             .await
             .unwrap();
         assert!(due_tasks(&orm).await.unwrap().is_empty());
+        // The 7-day window: a case older than a week stops being auto-reminded
+        // even with pending dimensions and an elapsed interval.
+        sqlx::query("UPDATE receipt_task SET last_reminded_at=0 WHERE id IN (1,3)")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE receipt_case SET created_at=datetime('now','-8 days') WHERE id=1")
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_eq!(due_tasks(&orm).await.unwrap(), vec![3]);
+        // Back inside the window it is due again.
+        sqlx::query("UPDATE receipt_case SET created_at=datetime('now','-6 days') WHERE id=1")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let mut due = due_tasks(&orm).await.unwrap();
+        due.sort_unstable();
+        assert_eq!(due, vec![1, 3]);
         sqlx::query("UPDATE sync_task SET auto_remind=0")
             .execute(&pool)
             .await

@@ -130,7 +130,7 @@ export default function SopPage() {
 
     <Section n="五" title="催办升级路径" tag="自动">
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        {['回执超时', '每 24h 私发催办 @ 未完成维度负责人（不设次数上限）', '第 3 次起追加 @ 升级提醒人', '长期无回执由安全人员直接联系', '严重/高危滞后通报管理层'].map((s, i) => (
+        {['回执超时', '每 24h 私发催办 @ 未完成维度负责人（仅催 7 天内新单）', '第 3 次起追加 @ 升级提醒人', '长期无回执由安全人员直接联系', '严重/高危滞后通报管理层'].map((s, i) => (
           <span key={i} className="flex items-center gap-2">
             {i > 0 && <span className="text-gray-300">→</span>}
             <Chip tone={i >= 2 ? 'amber' : 'blue'}>{s}</Chip>
